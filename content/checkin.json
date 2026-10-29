@@ -1,0 +1,21 @@
+{
+  "questions": [
+    {
+      "id": "did_write",
+      "type": "choice",
+      "text": "TODO: погодити. Чи виконали ви сьогоднішнє завдання?",
+      "options": [
+        {"value": "yes", "label": "Так"},
+        {"value": "partly", "label": "Частково"},
+        {"value": "no", "label": "Ні"}
+      ]
+    },
+    {
+      "id": "mood",
+      "type": "scale",
+      "text": "TODO: погодити. Як ви почуваєтесь зараз? 1 — дуже погано, 10 — дуже добре",
+      "min": 1,
+      "max": 10
+    }
+  ]
+}

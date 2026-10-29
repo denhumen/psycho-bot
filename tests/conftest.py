@@ -3,30 +3,54 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.bot.sender import Sender
 from app.clock import clock
 from app.config import Settings
 from app.context import AppContext
 from app.db.migrate import run_migrations
 from app.db.models import Participant, Status
-from app.db.session import create_engine, create_sessionmaker
-
-TEST_TOKEN = "123456:TEST-token-not-real"
+from app.db.session import create_engine, create_read_sessionmaker, create_sessionmaker
+from app.domain.content import load_content
+from tests.fakes import TOKEN, BotHarness, FakeTelegram, fake, make_bot
 
 
 def make_settings(tmp_path: Path, **overrides: object) -> Settings:
     values: dict[str, object] = {
-        "bot_token": TEST_TOKEN,
+        "bot_token": TOKEN,
         "database_path": tmp_path / "study.db",
         "session_secret": "s" * 48,
         "post_survey_url_template": "https://forms.example/view?entry.1={code}",
         "cookie_secure": False,
         "backup_chat_id": None,
         "admin_chat_id": None,
+        "code_validation": "open",
+        "support_contact": "@support_test",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
+
+
+def open_ctx(settings: Settings) -> AppContext:
+    """Контекст «процесу»: власний engine і фейковий бот. Два open_ctx на одну БД = рестарт.
+    Викликати close_ctx у кінці."""
+    run_migrations(settings.database_path)
+    engine = create_engine(settings.database_path)
+    db = create_sessionmaker(engine)
+    content = load_content(settings.content_dir, settings.support_contact)
+    return AppContext(
+        settings=settings,
+        engine=engine,
+        db=db,
+        read=create_read_sessionmaker(engine),
+        content=content,
+        sender=Sender(make_bot(), db),
+    )
+
+
+async def close_ctx(ctx: AppContext) -> None:
+    await ctx.engine.dispose()
 
 
 @pytest.fixture
@@ -36,34 +60,32 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture(autouse=True)
 def frozen_clock() -> Iterator[None]:
+    # 2026-03-02 08:00 UTC = 10:00 за Києвом (зимовий час).
     clock.freeze(datetime(2026, 3, 2, 8, 0, tzinfo=UTC))
     yield
     clock.reset()
 
 
 @pytest.fixture
-async def engine(settings: Settings) -> AsyncIterator[AsyncEngine]:
-    run_migrations(settings.database_path)
-    engine = create_engine(settings.database_path)
-    yield engine
-    await engine.dispose()
+async def ctx(settings: Settings) -> AsyncIterator[AppContext]:
+    context = open_ctx(settings)
+    yield context
+    await close_ctx(context)
 
 
 @pytest.fixture
-def db(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    return create_sessionmaker(engine)
+def db(ctx: AppContext) -> async_sessionmaker[AsyncSession]:
+    return ctx.db
 
 
 @pytest.fixture
-def ctx(settings: Settings, engine: AsyncEngine, db: async_sessionmaker[AsyncSession]) -> AppContext:
-    return AppContext(settings=settings, engine=engine, db=db)
+def tg(ctx: AppContext) -> FakeTelegram:
+    return fake(ctx)
 
 
-def open_ctx(settings: Settings) -> AppContext:
-    """Окремий контекст на власних налаштуваннях; викликати engine.dispose() у кінці."""
-    run_migrations(settings.database_path)
-    engine = create_engine(settings.database_path)
-    return AppContext(settings=settings, engine=engine, db=create_sessionmaker(engine))
+@pytest.fixture
+def harness(ctx: AppContext) -> BotHarness:
+    return BotHarness(ctx)
 
 
 async def add_participant(

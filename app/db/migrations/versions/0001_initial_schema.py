@@ -2,7 +2,7 @@
 
 Revision ID: 0001
 Revises: 
-Create Date: 2026-10-29 22:40:11.319353
+Create Date: 2026-10-29 22:51:32.109315
 """
 
 from collections.abc import Sequence
@@ -55,6 +55,11 @@ def upgrade() -> None:
     sa.Column('created_at', app.db.models.UTCDateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_participants')),
     sa.UniqueConstraint('code', name=op.f('uq_participants_code'))
+    )
+    op.create_table('processed_updates',
+    sa.Column('update_id', sa.BigInteger(), autoincrement=False, nullable=False),
+    sa.Column('created_at', app.db.models.UTCDateTime(), nullable=False),
+    sa.PrimaryKeyConstraint('update_id', name=op.f('pk_processed_updates'))
     )
     op.create_table('reminder_templates',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -186,6 +191,7 @@ def downgrade() -> None:
     op.drop_table('allocation_slots')
     op.drop_table('settings')
     op.drop_table('reminder_templates')
+    op.drop_table('processed_updates')
     op.drop_table('participants')
     op.drop_table('allowed_codes')
     op.drop_table('admin_users')

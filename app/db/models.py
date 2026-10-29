@@ -191,6 +191,15 @@ class Event(Created, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
 
+class ProcessedUpdate(Created, Base):
+    """update_id уже оброблених апдейтів Telegram: після рестарту getUpdates може
+    повернути їх знову (offset підтверджується лише наступним запитом)."""
+
+    __tablename__ = "processed_updates"
+
+    update_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+
+
 class Setting(Created, Base):
     __tablename__ = "settings"
 

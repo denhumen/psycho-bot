@@ -1,47 +1,78 @@
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from aiogram import Bot
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.bot.router import build_dispatcher, create_bot, run_polling
+from app.bot.sender import Sender
 from app.config import Settings
 from app.context import AppContext
 from app.db.migrate import run_migrations
-from app.db.session import create_engine, create_sessionmaker
+from app.db.session import create_engine, create_read_sessionmaker, create_sessionmaker
 from app.domain.allocation import ensure_slots
+from app.domain.content import load_content
 from app.logging_setup import configure_logging
 
 log = logging.getLogger(__name__)
 
 SCHEDULER_STALE_SECONDS = 120
+SHUTDOWN_TIMEOUT_SECONDS = 20
 
 
-def create_app(settings: Settings | None = None, *, run_background: bool = True) -> FastAPI:
-    """run_background=False — без бота і планувальника (для тестів адмінки)."""
+def create_app(settings: Settings | None = None, *, run_background: bool = True, bot: Bot | None = None) -> FastAPI:
+    """run_background=False — без polling і планувальника (тести адмінки).
+    bot — підмінений бот для тестів."""
     settings = settings or Settings()
     if run_background:
         settings.check_runtime()
+    configure_logging(settings.log_level)
+    # Невалідний контент — застосунок не стартує (ContentError з поясненням).
+    content = load_content(settings.content_dir, settings.support_contact)
+    for marker in content.todo_markers():
+        log.warning("Контент ще не погоджено: %s", marker)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        configure_logging(settings.log_level)
         await asyncio.to_thread(run_migrations, settings.database_path)
         engine = create_engine(settings.database_path)
-        ctx = AppContext(settings=settings, engine=engine, db=create_sessionmaker(engine))
+        db = create_sessionmaker(engine)
+        telegram = bot or create_bot(settings.bot_token.get_secret_value())
+        ctx = AppContext(
+            settings=settings,
+            engine=engine,
+            db=db,
+            read=create_read_sessionmaker(engine),
+            content=content,
+            sender=Sender(telegram, db),
+        )
         app.state.ctx = ctx
         async with ctx.db() as session, session.begin():
             await ensure_slots(session, settings)
         if settings.dev_day_minutes:
             log.warning("DEV_DAY_MINUTES=%s: прискорений розклад, НЕ для продакшену", settings.dev_day_minutes)
+
+        dp = build_dispatcher(ctx)
+        polling: asyncio.Task[None] | None = None
+        if run_background:
+            polling = asyncio.create_task(run_polling(dp, telegram), name="polling")
         log.info("Застосунок запущено")
         try:
             yield
         finally:
+            if polling is not None:
+                with contextlib.suppress(RuntimeError, TimeoutError):
+                    await asyncio.wait_for(dp.stop_polling(), SHUTDOWN_TIMEOUT_SECONDS)
+                polling.cancel()
+                await asyncio.gather(polling, return_exceptions=True)
+            await telegram.session.close()
             await engine.dispose()
             log.info("Застосунок зупинено")
 
@@ -51,7 +82,7 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True)
     async def healthz(request: Request) -> JSONResponse:
         ctx: AppContext = request.app.state.ctx
         try:
-            async with ctx.db() as session:
+            async with ctx.read() as session:
                 await session.execute(text("SELECT 1"))
         except Exception:
             log.exception("healthz: БД недоступна")

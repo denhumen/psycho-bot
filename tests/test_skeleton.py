@@ -14,6 +14,7 @@ from app.db.migrate import run_migrations
 from app.db.models import Base, Participant
 from app.main import create_app
 from tests.conftest import make_settings
+from tests.fakes import make_bot
 
 
 def test_settings_parse_lists_and_empty_ids(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,7 +74,7 @@ async def test_engine_pragmas_and_utc_roundtrip(db) -> None:  # type: ignore[no-
 
 
 def test_healthz(settings: Settings) -> None:
-    app = create_app(settings, run_background=False)
+    app = create_app(settings, run_background=False, bot=make_bot())
     with TestClient(app) as client:
         response = client.get("/healthz")
     assert response.status_code == 200

@@ -11,7 +11,7 @@ from app.context import AppContext
 from app.db.models import AllocationSlot, Event, Participant, Status, StudySession
 from app.domain.allocation import allocate, assign_slot, ensure_slots, make_block
 from app.domain.sessions import session_times, start_participant
-from tests.conftest import add_participant, make_settings, open_ctx
+from tests.conftest import add_participant, close_ctx, make_settings, open_ctx
 
 KYIV = ZoneInfo("Europe/Kyiv")
 
@@ -27,7 +27,7 @@ async def test_initial_generation(ctx: AppContext) -> None:
         await ensure_slots(s, ctx.settings)
     async with ctx.db() as s, s.begin():
         await ensure_slots(s, ctx.settings)  # повторний старт нічого не додає
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         slots = (await s.execute(select(AllocationSlot).order_by(AllocationSlot.slot_no))).scalars().all()
     assert len(slots) == 100 * 4
     assert [slot.slot_no for slot in slots] == list(range(400))
@@ -42,9 +42,9 @@ async def test_sequences_are_not_reproducible(tmp_path: Path) -> None:
         ctx = open_ctx(make_settings(tmp_path / name))
         async with ctx.db() as s, s.begin():
             await ensure_slots(s, ctx.settings)
-        async with ctx.db() as s:
+        async with ctx.read() as s:
             sequences.append((await s.execute(select(AllocationSlot.group).order_by(AllocationSlot.slot_no))).scalars().all())
-        await ctx.engine.dispose()
+        await close_ctx(ctx)
     assert sequences[0] != sequences[1]
 
 
@@ -59,7 +59,7 @@ async def test_sequential_balance_and_refill(tmp_path: Path) -> None:
         assert abs(counts["A"] - counts["B"]) <= 2
         if (i + 1) % 4 == 0:
             assert counts["A"] == counts["B"]
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         total = (await s.execute(select(func.count()).select_from(AllocationSlot))).scalar_one()
         free = (
             await s.execute(
@@ -68,7 +68,7 @@ async def test_sequential_balance_and_refill(tmp_path: Path) -> None:
         ).scalar_one()
     assert total > 3 * 4
     assert free >= settings.allocation_block_size
-    await ctx.engine.dispose()
+    await close_ctx(ctx)
 
 
 async def test_allocate_is_idempotent(ctx: AppContext) -> None:
@@ -76,7 +76,7 @@ async def test_allocate_is_idempotent(ctx: AppContext) -> None:
     first = await allocate(ctx, pid)
     for _ in range(5):
         assert await allocate(ctx, pid) == first
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         taken = (
             await s.execute(select(func.count()).select_from(AllocationSlot).where(AllocationSlot.participant_id == pid))
         ).scalar_one()
@@ -86,7 +86,7 @@ async def test_allocate_is_idempotent(ctx: AppContext) -> None:
 async def test_50_concurrent_allocations(ctx: AppContext) -> None:
     pids = [await add_participant(ctx.db, f"CONC{i:03d}") for i in range(50)]
     groups = await asyncio.gather(*(allocate(ctx, pid) for pid in pids))
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         rows = (await s.execute(select(AllocationSlot).where(AllocationSlot.participant_id.is_not(None)))).scalars().all()
     assert len(rows) == 50
     assert len({row.slot_no for row in rows}) == 50
@@ -105,7 +105,7 @@ async def test_50_concurrent_without_process_lock(ctx: AppContext) -> None:
             return await assign_slot(s, pid, ctx.settings)
 
     await asyncio.gather(*(raw_assign(pid) for pid in pids))
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         rows = (await s.execute(select(AllocationSlot).where(AllocationSlot.participant_id.is_not(None)))).scalars().all()
     assert sorted(row.slot_no for row in rows) == list(range(50))
 
@@ -164,7 +164,7 @@ async def test_start_participant_creates_sessions_once(ctx: AppContext) -> None:
     assert again is not None and not again.started_now
     assert again.first_instruction_at == result.first_instruction_at
 
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         participant = await s.get(Participant, pid)
         assert participant is not None
         assert participant.status == Status.ACTIVE
@@ -184,7 +184,7 @@ async def test_start_requires_consent_and_time(ctx: AppContext) -> None:
     no_time = await add_participant(ctx.db, "NOTIME", status=Status.CONSENTED)
     assert await start_participant(ctx, registered) is None
     assert await start_participant(ctx, no_time) is None
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         taken = (
             await s.execute(select(func.count()).select_from(AllocationSlot).where(AllocationSlot.participant_id.is_not(None)))
         ).scalar_one()
@@ -195,11 +195,11 @@ async def test_dev_day_minutes_schedule(tmp_path: Path) -> None:
     ctx = open_ctx(make_settings(tmp_path, dev_day_minutes=5, start_offset_days=0))
     pid = await add_participant(ctx.db, "DEV001", status=Status.CONSENTED, reminder_time="09:00")
     await start_participant(ctx, pid)
-    async with ctx.db() as s:
+    async with ctx.read() as s:
         sessions = (
             await s.execute(select(StudySession).where(StudySession.participant_id == pid).order_by(StudySession.day))
         ).scalars().all()
     now = clock.now()
     assert [x.scheduled_for - now for x in sessions] == [timedelta(minutes=5 * d) for d in range(7)]
     assert sessions[-1].deadline - sessions[-1].scheduled_for == timedelta(minutes=5)
-    await ctx.engine.dispose()
+    await close_ctx(ctx)
