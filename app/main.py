@@ -13,6 +13,7 @@ from app.config import Settings
 from app.context import AppContext
 from app.db.migrate import run_migrations
 from app.db.session import create_engine, create_sessionmaker
+from app.domain.allocation import ensure_slots
 from app.logging_setup import configure_logging
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,10 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True)
         engine = create_engine(settings.database_path)
         ctx = AppContext(settings=settings, engine=engine, db=create_sessionmaker(engine))
         app.state.ctx = ctx
+        async with ctx.db() as session, session.begin():
+            await ensure_slots(session, settings)
+        if settings.dev_day_minutes:
+            log.warning("DEV_DAY_MINUTES=%s: прискорений розклад, НЕ для продакшену", settings.dev_day_minutes)
         log.info("Застосунок запущено")
         try:
             yield
