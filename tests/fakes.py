@@ -1,5 +1,6 @@
 """Фейковий Telegram: перехоплює всі виклики Bot API, нічого не шле в мережу."""
 
+import asyncio
 import itertools
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -11,6 +12,8 @@ from aiogram.exceptions import TelegramForbiddenError
 from aiogram.methods import (
     AnswerCallbackQuery,
     EditMessageText,
+    GetMe,
+    GetUpdates,
     SendDocument,
     SendMessage,
     TelegramMethod,
@@ -49,6 +52,11 @@ class FakeTelegram(BaseSession):
             )
         if isinstance(method, (AnswerCallbackQuery, EditMessageText)):
             return True
+        if isinstance(method, GetMe):
+            return User(id=123456, is_bot=True, first_name="StudyBot", username="study_test_bot")
+        if isinstance(method, GetUpdates):
+            await asyncio.sleep(0.01)  # «long polling» без апдейтів
+            return []
         raise NotImplementedError(type(method).__name__)
 
     async def stream_content(self, *args: Any, **kwargs: Any) -> AsyncGenerator[bytes, None]:

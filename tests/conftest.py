@@ -96,7 +96,7 @@ async def activate(harness: BotHarness, chat_id: int, code: str, time: str = "20
     await harness.press(chat_id, f"time:{time}")
     await harness.press(chat_id, "ready")
     async with harness.ctx.read() as s:
-        participant = (await s.execute(select(Participant).where(Participant.code == code))).scalar_one()
+        participant = (await s.execute(select(Participant).where(Participant.code == code.strip().upper()))).scalar_one()
     assert participant.status == Status.ACTIVE
     return participant.id
 

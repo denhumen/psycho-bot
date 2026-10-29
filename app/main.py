@@ -20,6 +20,7 @@ from app.db.session import create_engine, create_read_sessionmaker, create_sessi
 from app.domain.allocation import ensure_slots
 from app.domain.content import load_content
 from app.logging_setup import configure_logging
+from app.scheduler.loop import Scheduler
 
 log = logging.getLogger(__name__)
 
@@ -60,18 +61,29 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True,
             log.warning("DEV_DAY_MINUTES=%s: прискорений розклад, НЕ для продакшену", settings.dev_day_minutes)
 
         dp = build_dispatcher(ctx)
+        scheduler = Scheduler(ctx)
         polling: asyncio.Task[None] | None = None
+        ticking: asyncio.Task[None] | None = None
         if run_background:
             polling = asyncio.create_task(run_polling(dp, telegram), name="polling")
+            ticking = asyncio.create_task(scheduler.run(), name="scheduler")
+            ctx.scheduler_enabled = True
         log.info("Застосунок запущено")
         try:
             yield
         finally:
+            # SIGTERM: зупиняємо polling, даємо планувальнику доробити поточний тік.
             if polling is not None:
                 with contextlib.suppress(RuntimeError, TimeoutError):
                     await asyncio.wait_for(dp.stop_polling(), SHUTDOWN_TIMEOUT_SECONDS)
                 polling.cancel()
                 await asyncio.gather(polling, return_exceptions=True)
+            if ticking is not None:
+                scheduler.stop()
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(ticking), SHUTDOWN_TIMEOUT_SECONDS)
+                ticking.cancel()
+                await asyncio.gather(ticking, return_exceptions=True)
             await telegram.session.close()
             await engine.dispose()
             log.info("Застосунок зупинено")

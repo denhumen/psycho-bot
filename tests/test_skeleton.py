@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -79,3 +80,18 @@ def test_healthz(settings: Settings) -> None:
         response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_full_app_starts_polls_ticks_and_stops(settings: Settings) -> None:
+    """Повний lifespan: міграції, polling, планувальник; коректна зупинка (як на SIGTERM)."""
+    bot = make_bot()
+    app = create_app(settings, run_background=True, bot=bot)
+    with TestClient(app) as client:
+        for _ in range(100):
+            if client.get("/healthz").status_code == 200:
+                break
+            time.sleep(0.02)
+        assert client.get("/healthz").json() == {"status": "ok"}
+        assert app.state.ctx.scheduler_enabled
+    calls = {type(c).__name__ for c in bot.session.calls}  # type: ignore[attr-defined]
+    assert {"GetMe", "GetUpdates"} <= calls
