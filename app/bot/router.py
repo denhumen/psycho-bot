@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.backoff import BackoffConfig
 
-from app.bot.handlers import consent, free_text, registration, start, time
+from app.bot.handlers import checkin, commands, consent, free_text, registration, start, time
 from app.bot.middleware import DeduplicateUpdatesMiddleware, PrivateActivityMiddleware
 from app.context import AppContext
 
@@ -29,9 +29,11 @@ def build_dispatcher(ctx: AppContext) -> Dispatcher:
     dp.callback_query.outer_middleware(middleware)
     dp.include_routers(
         start.make_router(),
+        commands.make_router(),
         consent.make_router(),
         time.make_router(),
         registration.make_router(),
+        checkin.make_router(),
         free_text.make_router(),  # останнім: ловить усе інше
     )
     return dp

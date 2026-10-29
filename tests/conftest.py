@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.bot.sender import Sender
@@ -10,7 +11,7 @@ from app.clock import clock
 from app.config import Settings
 from app.context import AppContext
 from app.db.migrate import run_migrations
-from app.db.models import Participant, Status
+from app.db.models import Participant, Status, StudySession
 from app.db.session import create_engine, create_read_sessionmaker, create_sessionmaker
 from app.domain.content import load_content
 from tests.fakes import TOKEN, BotHarness, FakeTelegram, fake, make_bot
@@ -86,6 +87,39 @@ def tg(ctx: AppContext) -> FakeTelegram:
 @pytest.fixture
 def harness(ctx: AppContext) -> BotHarness:
     return BotHarness(ctx)
+
+
+async def activate(harness: BotHarness, chat_id: int, code: str, time: str = "20:00") -> int:
+    """Повна реєстрація через бота: код → згода → час → «Готовий почати»."""
+    await harness.text(chat_id, code)
+    await harness.press(chat_id, "consent:yes")
+    await harness.press(chat_id, f"time:{time}")
+    await harness.press(chat_id, "ready")
+    async with harness.ctx.read() as s:
+        participant = (await s.execute(select(Participant).where(Participant.code == code))).scalar_one()
+    assert participant.status == Status.ACTIVE
+    return participant.id
+
+
+async def get_session(ctx: AppContext, participant_id: int, day: int) -> StudySession:
+    async with ctx.read() as s:
+        return (
+            await s.execute(
+                select(StudySession).where(StudySession.participant_id == participant_id, StudySession.day == day)
+            )
+        ).scalar_one()
+
+
+async def mark_sent(ctx: AppContext, participant_id: int, day: int) -> StudySession:
+    """Імітує надіслану планувальником інструкцію (сам планувальник — етап 5)."""
+    async with ctx.db() as s, s.begin():
+        study_session = (
+            await s.execute(
+                select(StudySession).where(StudySession.participant_id == participant_id, StudySession.day == day)
+            )
+        ).scalar_one()
+        study_session.sent_at = clock.now()
+    return study_session
 
 
 async def add_participant(

@@ -41,6 +41,26 @@ def dev_session_times(base: datetime, offset_days: int, day_minutes: int) -> lis
     return list(zip(scheduled, deadlines, strict=True))
 
 
+async def reschedule_unsent(session: AsyncSession, participant: Participant, settings: Settings) -> int:
+    """/time: перерахувати scheduled_for/deadline лише для ще не надісланих сесій.
+    Дедлайн уже надісланої сесії не змінюється (див. DECISIONS.md)."""
+    if settings.dev_day_minutes or participant.start_date is None or participant.reminder_time is None:
+        return 0
+    times = session_times(participant.start_date, participant.reminder_time, settings.tz)
+    pending = (
+        await session.execute(
+            select(StudySession).where(
+                StudySession.participant_id == participant.id,
+                StudySession.sent_at.is_(None),
+                StudySession.missed_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for study_session in pending:
+        study_session.scheduled_for, study_session.deadline = times[study_session.day - 1]
+    return len(pending)
+
+
 @dataclass
 class StartResult:
     first_instruction_at: datetime
