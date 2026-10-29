@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Бекап{% endblock %}
+{% block content %}
+<h2>Бекап бази даних</h2>
+<p>Останній бекап у Telegram: <strong>{{ local(last_backup) }}</strong></p>
+<p class="muted">Копія робиться через SQLite backup API — узгоджений знімок без зупинки бота. Файл містить усі дані, зокрема розподіл за групами.</p>
+<div class="grid">
+  <form method="post" action="/backup/download">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Завантажити копію БД</button>
+  </form>
+  <form method="post" action="/backup/send">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="secondary" {% if not chat_configured %}disabled title="BACKUP_CHAT_ID не задано"{% endif %}>
+      Надіслати бекап у Telegram зараз</button>
+  </form>
+</div>
+{% endblock %}

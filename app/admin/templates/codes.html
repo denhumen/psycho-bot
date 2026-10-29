@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Коди{% endblock %}
+{% block content %}
+<h2>Коди учасників</h2>
+{% if validation != "whitelist" %}
+<p class="flash-error">Зараз CODE_VALIDATION={{ validation }}: бот приймає будь-який код за форматом, список нижче не використовується.</p>
+{% endif %}
+<div class="grid-stats">
+  <article><div class="stat">{{ total }}</div>усього</article>
+  <article><div class="stat">{{ used }}</div>використано</article>
+  <article><div class="stat">{{ free }}</div>вільних</article>
+</div>
+
+{% if report %}
+<article>
+  <strong>Результат завантаження:</strong> додано {{ report.added }}, дублікатів {{ report.duplicates }}, невалідних {{ report.invalid }}.
+  {% if report.invalid_examples %}<br><small>Невалідні: {{ report.invalid_examples | join(", ") }}</small>{% endif %}
+</article>
+{% endif %}
+
+<form method="post" action="/codes" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Коди, по одному в рядку
+    <textarea name="codes" rows="8" placeholder="ABC123&#10;XYZ789"></textarea>
+  </label>
+  <label>або CSV-файл (береться перша колонка, UTF-8)
+    <input type="file" name="file" accept=".csv,.txt,text/csv,text/plain">
+  </label>
+  <p class="muted">Коди нормалізуються (обрізаються пробіли, переводяться у верхній регістр) і перевіряються за CODE_REGEX.</p>
+  <button type="submit">Завантажити</button>
+</form>
+{% endblock %}

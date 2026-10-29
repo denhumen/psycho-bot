@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Користувачі{% endblock %}
+{% block content %}
+<h2>Користувачі адмінки</h2>
+<div class="overflow-auto">
+<table>
+  <thead><tr><th>Логін</th><th>Роль</th><th>Активний</th><th>Останній вхід</th><th></th><th>Новий пароль</th></tr></thead>
+  <tbody>
+  {% for user in users %}
+  <tr>
+    <td>{{ user.username }}</td>
+    <td>{{ user.role }}</td>
+    <td>{{ "так" if user.is_active else "ні" }}</td>
+    <td>{{ local(user.last_login_at) }}</td>
+    <td>
+      {% if user.id != admin.id %}
+      <form method="post" action="/users/{{ user.id }}/active" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}">
+        <button type="submit" class="secondary outline" style="margin:0">{{ "Деактивувати" if user.is_active else "Активувати" }}</button>
+      </form>
+      {% endif %}
+    </td>
+    <td>
+      <form method="post" action="/users/{{ user.id }}/password" style="margin:0;display:flex;gap:.5rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="password" name="password" minlength="10" required autocomplete="new-password" aria-label="Новий пароль" style="margin:0">
+        <button type="submit" class="outline" style="margin:0">Змінити</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h4>Новий користувач</h4>
+<form method="post" action="/users">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid">
+    <input name="username" placeholder="Логін" required autocomplete="off">
+    <input type="password" name="password" placeholder="Пароль (від 10 символів)" minlength="10" required autocomplete="new-password">
+    <select name="role" aria-label="Роль">
+      {% for role in roles %}<option value="{{ role }}" {% if role == "researcher" %}selected{% endif %}>{{ role }}</option>{% endfor %}
+    </select>
+    <button type="submit">Створити</button>
+  </div>
+</form>
+{% endblock %}

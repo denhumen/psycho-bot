@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Експорт{% endblock %}
+{% block content %}
+<h2>Експорт даних</h2>
+<p>ZIP-архів із CSV (UTF-8, час — за Києвом у форматі ISO 8601):</p>
+<ul>
+  <li><code>participants.csv</code> — код, <strong>група</strong>, статус, дати, час нагадувань;</li>
+  <li><code>sessions.csv</code> — 7 сесій кожного учасника;</li>
+  <li><code>checkin_answers.csv</code> — відповіді (один рядок = одна відповідь);</li>
+  <li><code>checkin_answers_wide.csv</code> — один рядок = учасник × день, колонки = питання;</li>
+  <li><code>messages.csv</code> — переписка (без тексту інструкцій);</li>
+  <li><code>events.csv</code> — журнал подій.</li>
+</ul>
+<p class="flash-error">Архів містить розподіл за групами. Не передавайте його тим, хто має залишатися «сліпим» до груп.</p>
+<form method="post" action="/export">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit">Завантажити ZIP</button>
+</form>
+{% endblock %}
