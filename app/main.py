@@ -40,8 +40,8 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True,
     configure_logging(settings.log_level)
     # Невалідний контент — застосунок не стартує (ContentError з поясненням).
     content = load_content(settings.content_dir, settings.support_contact)
-    for marker in content.todo_markers():
-        log.warning("Контент ще не погоджено: %s", marker)
+    if markers := content.todo_markers():
+        log.warning("Контент ще не погоджено (TODO): %s", ", ".join(markers))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
