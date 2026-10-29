@@ -8,9 +8,12 @@ from typing import Any
 
 from aiogram import Bot
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import text
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.admin.auth import SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, LoginRequired
+from app.admin.routes import build_router as build_admin_router
 from app.bot.router import build_dispatcher, create_bot, run_polling
 from app.bot.sender import Sender
 from app.config import Settings
@@ -89,6 +92,20 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True,
             log.info("Застосунок зупинено")
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    # Підписаний cookie сесії: HttpOnly завжди, Secure — за COOKIE_SECURE.
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret.get_secret_value() or "unset",
+        session_cookie=SESSION_COOKIE,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        same_site="lax",
+        https_only=settings.cookie_secure,
+    )
+    app.include_router(build_admin_router())
+
+    @app.exception_handler(LoginRequired)
+    async def _to_login(_request: Request, _exc: LoginRequired) -> RedirectResponse:
+        return RedirectResponse("/login", status_code=303)
 
     @app.get("/healthz")
     async def healthz(request: Request) -> JSONResponse:

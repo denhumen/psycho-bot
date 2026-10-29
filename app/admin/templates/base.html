@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Адмінка дослідження{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+  <style>
+    :root { --pico-font-size: 95%; }
+    nav ul li { padding-top: .25rem; padding-bottom: .25rem; }
+    .flash-ok { border-left: 4px solid #2e7d32; padding: .5rem 1rem; background: rgba(46,125,50,.08); }
+    .flash-error { border-left: 4px solid #c62828; padding: .5rem 1rem; background: rgba(198,40,40,.08); }
+    .cells { font-family: monospace; letter-spacing: .2rem; white-space: nowrap; }
+    .stat { font-size: 1.6rem; font-weight: 600; }
+    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; }
+    .grid-stats article { margin: 0; }
+    .chat { display: flex; flex-direction: column; gap: .5rem; max-height: 32rem; overflow-y: auto; padding: .5rem; }
+    .bubble { max-width: 80%; padding: .5rem .75rem; border-radius: .6rem; white-space: pre-wrap; word-break: break-word; }
+    .bubble small { display: block; opacity: .7; font-size: .75rem; }
+    .in { align-self: flex-start; background: rgba(127,127,127,.12); }
+    .out { align-self: flex-end; background: rgba(1,114,173,.12); }
+    .unread { outline: 2px solid #f9a825; }
+    .badge { display: inline-block; padding: 0 .4rem; border-radius: .5rem; background: #f9a825; color: #000; font-size: .8rem; }
+    table { font-size: .9rem; }
+    .muted { opacity: .65; }
+  </style>
+</head>
+<body>
+<header class="container">
+  <nav>
+    <ul><li><strong>Дослідження</strong></li></ul>
+    {% if admin %}
+    <ul>
+      <li><a href="/">Дашборд</a></li>
+      <li><a href="/participants">Учасники</a></li>
+      <li><a href="/templates">Шаблони</a></li>
+      {% if admin.role == "owner" %}
+      <li><a href="/codes">Коди</a></li>
+      <li><a href="/export">Експорт</a></li>
+      <li><a href="/backup">Бекап</a></li>
+      <li><a href="/users">Користувачі</a></li>
+      {% endif %}
+      <li>
+        <form method="post" action="/logout" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="secondary outline" style="padding:.2rem .6rem;margin:0">Вийти ({{ admin.username }})</button>
+        </form>
+      </li>
+    </ul>
+    {% endif %}
+  </nav>
+</header>
+<main class="container">
+  {% for kind, text in flashes %}
+  <p class="flash-{{ kind }}">{{ text }}</p>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

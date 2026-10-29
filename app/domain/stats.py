@@ -79,6 +79,6 @@ async def group_counts(session: AsyncSession) -> dict[str, dict[str, int]]:
         .group_by(AllocationSlot.group)
     )
     result = {"randomized": {"A": 0, "B": 0}, "completed": {"A": 0, "B": 0}}
-    result["randomized"].update(dict(randomized.tuples()))
-    result["completed"].update(dict(completed.tuples()))
+    result["randomized"].update(dict(randomized.tuples().all()))
+    result["completed"].update(dict(completed.tuples().all()))
     return result

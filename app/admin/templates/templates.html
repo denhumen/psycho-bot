@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Шаблони{% endblock %}
+{% block content %}
+<h2>Шаблони нагадувань</h2>
+<p class="muted">Шаблони підставляються у форму «Написати» на картці учасника. Тексти однакові для всіх учасників.</p>
+
+{% for item in items %}
+<article>
+  <form method="post" action="/templates/{{ item.id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="title" value="{{ item.title }}" required aria-label="Назва">
+    <textarea name="text" rows="3" required aria-label="Текст">{{ item.text }}</textarea>
+    <label><input type="checkbox" name="is_active" {% if item.is_active %}checked{% endif %}> активний</label>
+    <button type="submit">Зберегти</button>
+  </form>
+  <form method="post" action="/templates/{{ item.id }}/delete" onsubmit="return confirm('Видалити шаблон?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="secondary outline">Видалити</button>
+  </form>
+</article>
+{% else %}
+<p class="muted">Шаблонів ще немає.</p>
+{% endfor %}
+
+<h4>Новий шаблон</h4>
+<form method="post" action="/templates">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input name="title" placeholder="Назва" required>
+  <textarea name="text" rows="3" placeholder="Текст" required></textarea>
+  <label><input type="checkbox" name="is_active" checked> активний</label>
+  <button type="submit">Створити</button>
+</form>
+{% endblock %}

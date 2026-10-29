@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Учасники{% endblock %}
+{% block content %}
+<h2>Учасники</h2>
+<form method="get" action="/participants">
+  <div class="grid">
+    <select name="status" aria-label="Статус">
+      <option value="">усі статуси</option>
+      {% for value, label in statuses.items() %}
+      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="flag" aria-label="Фільтр">
+      {% for value, label in filters.items() %}
+      <option value="{{ value }}" {% if value == flag %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <input type="search" name="q" value="{{ q }}" placeholder="Пошук за кодом">
+    <button type="submit">Показати</button>
+  </div>
+</form>
+
+<p class="muted">Прогрес:
+  {% for symbol, title in cell_titles.items() %}{{ symbol }} {{ title }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  Знайдено: {{ rows|length }}.</p>
+
+<div class="overflow-auto">
+<table class="striped">
+  <thead>
+    <tr><th>Код</th><th>Статус</th><th>День</th><th>Прогрес</th><th>Остання активність</th><th>Непрочитані</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="/participants/{{ row.participant.code }}">{{ row.participant.code }}</a>{% if row.participant.bot_blocked %} 🚫{% endif %}</td>
+      <td>{{ status_label(row.participant.status) }}</td>
+      <td>{{ row.day }}/{{ days }}</td>
+      <td class="cells">{% for c in row.cells %}<span title="День {{ loop.index }}: {{ cell_titles[c] }}">{{ c }}</span>{% endfor %}</td>
+      <td>{{ local(row.participant.last_activity_at) }}</td>
+      <td>{% if row.unread %}<span class="badge">{{ row.unread }}</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Нікого не знайдено.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

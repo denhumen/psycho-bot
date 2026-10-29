@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ participant.code }}{% endblock %}
+{% block content %}
+<h2>Учасник {{ participant.code }}</h2>
+
+<div class="grid">
+  <article>
+    <p>Статус: <strong>{{ status_label(participant.status) }}</strong>
+      {% if participant.bot_blocked %}<br><span class="flash-error">Учасник заблокував бота</span>{% endif %}</p>
+    <p>Час нагадувань: <strong>{{ participant.reminder_time or "—" }}</strong></p>
+    <p>Остання активність: {{ local(participant.last_activity_at) }}</p>
+  </article>
+  <article>
+    <small>
+      Зареєстрований: {{ local(participant.created_at) }}<br>
+      Згода: {{ local(participant.consented_at) }}<br>
+      Старт: {{ local(participant.randomized_at) }}{% if participant.start_date %} (перший день {{ participant.start_date.strftime("%d.%m.%Y") }}){% endif %}<br>
+      Завершив: {{ local(participant.completed_at) }}<br>
+      Фінальна анкета надіслана: {{ local(participant.post_survey_sent_at) }}<br>
+      Вибув: {{ local(participant.withdrawn_at) }}
+    </small>
+  </article>
+</div>
+
+<h4>7 днів</h4>
+<div class="overflow-auto">
+<table>
+  <thead><tr><th>День</th><th>Заплановано</th><th>Надіслано</th><th>Нагадування</th><th>Результат</th><th>Відповіді</th></tr></thead>
+  <tbody>
+  {% for s in sessions %}
+    <tr>
+      <td>{{ s.day }}</td>
+      <td>{{ local(s.scheduled_for) }}</td>
+      <td>{{ local(s.sent_at) }}</td>
+      <td>{{ local(s.reminder_sent_at) }}</td>
+      <td>
+        {% if s.completed_at %}● пройдено {{ local(s.completed_at) }}
+        {% elif s.missed_at %}✕ пропущено
+        {% elif s.sent_at and s.deadline > now %}○ очікує до {{ local(s.deadline) }}
+        {% elif s.sent_at %}✕ дедлайн минув
+        {% else %}·{% endif %}
+      </td>
+      <td>{% for qid, label in answers.get(s.id, []) %}{{ qid }}: <strong>{{ label }}</strong>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Учасник ще не стартував.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h4>Переписка</h4>
+<article>
+  <div class="chat">
+  {% for line in chat %}
+    <div class="bubble {{ line.message.direction }}{% if line.unread %} unread{% endif %}">
+      <small>{{ local(line.message.created_at) }}{% if line.author %} · {{ line.author }}{% endif %}{% if line.unread %} · нове{% endif %}</small>{{ line.text }}</div>
+  {% else %}
+    <p class="muted">Повідомлень ще немає.</p>
+  {% endfor %}
+  </div>
+</article>
+
+<h4>Написати</h4>
+{% if can_message %}
+<form method="post" action="/participants/{{ participant.code }}/message">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if reminder_templates %}
+  <select id="template" aria-label="Шаблон" onchange="if (this.value) document.getElementById('text').value = this.options[this.selectedIndex].dataset.text;">
+    <option value="">— шаблон —</option>
+    {% for t in reminder_templates %}<option value="{{ t.id }}" data-text="{{ t.text }}">{{ t.title }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <textarea id="text" name="text" rows="4" required placeholder="Текст повідомлення учаснику"></textarea>
+  <button type="submit">Надіслати через бота</button>
+</form>
+{% else %}
+<p class="flash-error">Учасник {{ status_label(participant.status) }} — надсилати повідомлення не можна.</p>
+{% endif %}
+
+{% if can_withdraw %}
+<h4>Керування</h4>
+<form method="post" action="/participants/{{ participant.code }}/withdraw"
+      onsubmit="return confirm('Позначити учасника {{ participant.code }} як вибулого? Автоматичні повідомлення припиняться.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="secondary outline">Позначити як вибув</button>
+</form>
+{% endif %}
+
+<details>
+  <summary>Журнал подій</summary>
+  <table>
+    <tbody>
+    {% for e in events %}
+      <tr><td>{{ local(e.at) }}</td><td>{{ e.type }}</td><td>{{ e.actor }}</td><td><small>{{ e.payload | tojson }}</small></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endblock %}
