@@ -3,6 +3,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 
 from app.admin.auth import current_admin, get_ctx, require_owner
+from app.admin.overview import load_rows
 from app.admin.web import flash, redirect, render
 from app.clock import clock
 from app.db.models import AdminUser, AllocationSlot, Event, Participant
@@ -49,7 +50,14 @@ async def dashboard(request: Request, admin: AdminUser = Depends(current_admin))
         ).scalar_one()
         last_backup = await get_time(session, LAST_BACKUP_AT)
         paused = await is_paused(session)
-    return render(
+        rows = await load_rows(session, now)
+    attention = {
+        "unread": sum(1 for r in rows if r.unread),
+        "not_done_today": sum(1 for r in rows if r.pending_now),
+        "missed_streak": sum(1 for r in rows if r.missed_streak),
+        "not_started": sum(1 for r in rows if r.not_started),
+    }
+    return await render(
         request,
         "dashboard.html",
         admin,
@@ -65,6 +73,8 @@ async def dashboard(request: Request, admin: AdminUser = Depends(current_admin))
         blocked=blocked,
         last_backup=last_backup,
         paused=paused,
+        attention=attention,
+        now=now,
     )
 
 

@@ -1,33 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Шаблони{% endblock %}
 {% block content %}
-<h2>Шаблони нагадувань</h2>
-<p class="muted">Шаблони підставляються у форму «Написати» на картці учасника. Тексти однакові для всіх учасників.</p>
+<div class="page-head">
+  <div>
+    <h1>Шаблони повідомлень</h1>
+    <div class="sub">Готові тексти для форми «Переписка» на картці учасника. Однакові для всіх учасників.</div>
+  </div>
+</div>
 
-{% for item in items %}
-<article>
-  <form method="post" action="/templates/{{ item.id }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input name="title" value="{{ item.title }}" required aria-label="Назва">
-    <textarea name="text" rows="3" required aria-label="Текст">{{ item.text }}</textarea>
-    <label><input type="checkbox" name="is_active" {% if item.is_active %}checked{% endif %}> активний</label>
-    <button type="submit">Зберегти</button>
-  </form>
-  <form method="post" action="/templates/{{ item.id }}/delete" onsubmit="return confirm('Видалити шаблон?');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="secondary outline">Видалити</button>
-  </form>
-</article>
-{% else %}
-<p class="muted">Шаблонів ще немає.</p>
-{% endfor %}
+<div class="grid-main">
+  <div class="stack">
+    {% for item in items %}
+    <section class="card">
+      <form method="post" action="/templates/{{ item.id }}" class="card-pad">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label><span>Назва</span><input name="title" value="{{ item.title }}" required></label>
+        <label><span>Текст</span><textarea name="text" rows="3" required>{{ item.text }}</textarea></label>
+        <div class="row" style="justify-content:space-between">
+          <label class="check"><input type="checkbox" name="is_active" {% if item.is_active %}checked{% endif %}> показувати в картці учасника</label>
+          <div class="row">
+            <button type="submit" class="btn secondary sm">Зберегти</button>
+            <button type="submit" form="del-{{ item.id }}" class="btn ghost sm">Видалити</button>
+          </div>
+        </div>
+      </form>
+      <form id="del-{{ item.id }}" method="post" action="/templates/{{ item.id }}/delete" class="inline-form"
+            onsubmit="return confirm('Видалити шаблон «{{ item.title }}»? Уже надіслані повідомлення не зміняться.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      </form>
+    </section>
+    {% else %}
+    <div class="card empty">Шаблонів ще немає. Створіть перший праворуч.</div>
+    {% endfor %}
+  </div>
 
-<h4>Новий шаблон</h4>
-<form method="post" action="/templates">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <input name="title" placeholder="Назва" required>
-  <textarea name="text" rows="3" placeholder="Текст" required></textarea>
-  <label><input type="checkbox" name="is_active" checked> активний</label>
-  <button type="submit">Створити</button>
-</form>
+  <section class="card card-pad" aria-labelledby="new-t">
+    <h2 id="new-t">Новий шаблон</h2>
+    <form method="post" action="/templates">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label><span>Назва</span><input name="title" placeholder="Напр. «М'яке нагадування»" required></label>
+      <label><span>Текст</span><textarea name="text" rows="4" required></textarea></label>
+      <label class="check" style="margin-bottom:14px"><input type="checkbox" name="is_active" checked> показувати в картці учасника</label>
+      <div><button type="submit" class="btn">Створити шаблон</button></div>
+    </form>
+  </section>
+</div>
 {% endblock %}

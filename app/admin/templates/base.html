@@ -4,58 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{% block title %}Адмінка дослідження{% endblock %}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
-  <style>
-    :root { --pico-font-size: 95%; }
-    nav ul li { padding-top: .25rem; padding-bottom: .25rem; }
-    .flash-ok { border-left: 4px solid #2e7d32; padding: .5rem 1rem; background: rgba(46,125,50,.08); }
-    .flash-error { border-left: 4px solid #c62828; padding: .5rem 1rem; background: rgba(198,40,40,.08); }
-    .cells { font-family: monospace; letter-spacing: .2rem; white-space: nowrap; }
-    .stat { font-size: 1.6rem; font-weight: 600; }
-    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; }
-    .grid-stats article { margin: 0; }
-    .chat { display: flex; flex-direction: column; gap: .5rem; max-height: 32rem; overflow-y: auto; padding: .5rem; }
-    .bubble { max-width: 80%; padding: .5rem .75rem; border-radius: .6rem; white-space: pre-wrap; word-break: break-word; }
-    .bubble small { display: block; opacity: .7; font-size: .75rem; }
-    .in { align-self: flex-start; background: rgba(127,127,127,.12); }
-    .out { align-self: flex-end; background: rgba(1,114,173,.12); }
-    .unread { outline: 2px solid #f9a825; }
-    .badge { display: inline-block; padding: 0 .4rem; border-radius: .5rem; background: #f9a825; color: #000; font-size: .8rem; }
-    table { font-size: .9rem; }
-    .muted { opacity: .65; }
-  </style>
+  <title>{% block title %}Адмінка{% endblock %} · Дослідження</title>
+  <style>{% include "_styles.css" %}</style>
 </head>
 <body>
-<header class="container">
-  <nav>
-    <ul><li><strong>Дослідження</strong></li></ul>
-    {% if admin %}
-    <ul>
-      <li><a href="/">Дашборд</a></li>
-      <li><a href="/participants">Учасники</a></li>
-      <li><a href="/templates">Шаблони</a></li>
+{% if admin %}
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">✎</span><span>Дослідження<small>експресивне письмо</small></span></div>
+    <nav class="nav" aria-label="Основна навігація">
+      <a href="/" class="{{ 'active' if path == '/' }}">Огляд</a>
+      <a href="/participants" class="{{ 'active' if path.startswith('/participants') }}">Учасники
+        {% if nav_unread %}<span class="count" title="Непрочитаних повідомлень">{{ nav_unread }}</span>{% endif %}</a>
+      <a href="/templates" class="{{ 'active' if path.startswith('/templates') }}">Шаблони</a>
       {% if admin.role == "owner" %}
-      <li><a href="/codes">Коди</a></li>
-      <li><a href="/export">Експорт</a></li>
-      <li><a href="/backup">Бекап</a></li>
-      <li><a href="/users">Користувачі</a></li>
+      <div class="nav-label">Керування</div>
+      <a href="/codes" class="{{ 'active' if path.startswith('/codes') }}">Коди</a>
+      <a href="/export" class="{{ 'active' if path.startswith('/export') }}">Експорт</a>
+      <a href="/backup" class="{{ 'active' if path.startswith('/backup') }}">Бекап</a>
+      <a href="/users" class="{{ 'active' if path.startswith('/users') }}">Користувачі</a>
       {% endif %}
-      <li>
-        <form method="post" action="/logout" style="margin:0">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="secondary outline" style="padding:.2rem .6rem;margin:0">Вийти ({{ admin.username }})</button>
-        </form>
-      </li>
-    </ul>
-    {% endif %}
-  </nav>
-</header>
-<main class="container">
-  {% for kind, text in flashes %}
-  <p class="flash-{{ kind }}">{{ text }}</p>
-  {% endfor %}
-  {% block content %}{% endblock %}
-</main>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="who-block"><div class="who">{{ admin.username }}</div><div class="faint small">{{ admin.role }}</div></div>
+      <form method="post" action="/logout" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn ghost sm">Вийти</button>
+      </form>
+    </div>
+  </aside>
+  <main class="main">
+    {% for kind, text in flashes %}<div class="flash flash-{{ kind }}" role="status">{{ text }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+{% block anonymous %}{% endblock %}
+{% endif %}
 </body>
 </html>

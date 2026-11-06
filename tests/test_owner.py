@@ -68,7 +68,8 @@ async def test_codes_upload_and_whitelist(tmp_path: Path) -> None:
     with admin_client(settings) as (client, _):
         login(client, *OWNER)
         page = client.get("/codes").text
-        assert '<div class="stat">3</div>усього' in page and '<div class="stat">1</div>використано' in page
+        assert '<div class="value">3</div><div class="label">усього кодів</div>' in page
+        assert '<div class="value">1</div><div class="label">використано</div>' in page
     await close_ctx(ctx)
 
 

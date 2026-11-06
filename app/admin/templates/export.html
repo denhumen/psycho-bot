@@ -1,19 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Експорт{% endblock %}
 {% block content %}
-<h2>Експорт даних</h2>
-<p>ZIP-архів із CSV (UTF-8, час — за Києвом у форматі ISO 8601):</p>
-<ul>
-  <li><code>participants.csv</code> — код, <strong>група</strong>, статус, дати, час нагадувань;</li>
-  <li><code>sessions.csv</code> — 7 сесій кожного учасника;</li>
-  <li><code>checkin_answers.csv</code> — відповіді (один рядок = одна відповідь);</li>
-  <li><code>checkin_answers_wide.csv</code> — один рядок = учасник × день, колонки = питання;</li>
-  <li><code>messages.csv</code> — переписка (без тексту інструкцій);</li>
-  <li><code>events.csv</code> — журнал подій.</li>
-</ul>
-<p class="flash-error">Архів містить розподіл за групами. Не передавайте його тим, хто має залишатися «сліпим» до груп.</p>
-<form method="post" action="/export">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="submit">Завантажити ZIP</button>
-</form>
+<div class="page-head">
+  <div>
+    <h1>Експорт даних</h1>
+    <div class="sub">ZIP-архів із CSV (UTF-8; час — за Києвом у форматі ISO 8601).</div>
+  </div>
+</div>
+
+<div class="note warn" style="margin-bottom:16px"><strong>Архів містить розподіл учасників за групами.</strong> Не передавайте його тим, хто має залишатися «сліпим» до груп. Кожне завантаження записується в журнал.</div>
+
+<section class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Файл</th><th>Що всередині</th></tr></thead>
+    <tbody>
+      <tr><td><code>participants.csv</code></td><td>код, <strong>група</strong>, статус, усі дати, час нагадувань</td></tr>
+      <tr><td><code>sessions.csv</code></td><td>7 сесій кожного учасника: заплановано, надіслано, нагадування, пройдено / пропущено</td></tr>
+      <tr><td><code>checkin_answers.csv</code></td><td>відповіді чек-іну, один рядок — одна відповідь</td></tr>
+      <tr><td><code>checkin_answers_wide.csv</code></td><td>один рядок — учасник × день, колонки — питання</td></tr>
+      <tr><td><code>messages.csv</code></td><td>переписка (без тексту інструкцій)</td></tr>
+      <tr><td><code>events.csv</code></td><td>журнал подій</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="composer">
+    <form method="post" action="/export" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Завантажити ZIP</button>
+    </form>
+  </div>
+</section>
 {% endblock %}

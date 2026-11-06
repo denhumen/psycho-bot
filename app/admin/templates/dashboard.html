@@ -1,59 +1,121 @@
 {% extends "base.html" %}
-{% block title %}Дашборд{% endblock %}
+{% block title %}Огляд{% endblock %}
 {% block content %}
-<h2>Дашборд</h2>
-
-<h4>Учасники за статусами</h4>
-<div class="grid-stats">
-  <article><div class="stat">{{ total }}</div>усього</article>
-  {% for status, n in counts.items() %}
-  <article><div class="stat">{{ n }}</div><a href="/participants?status={{ status }}">{{ status_label(status) }}</a></article>
-  {% endfor %}
+<div class="page-head">
+  <div>
+    <h1>Огляд</h1>
+    <div class="sub">Стан дослідження на {{ local(now, "%d.%m.%Y, %H:%M") }}</div>
+  </div>
 </div>
 
-<h4>Рандомізація</h4>
-<div class="grid-stats">
-  <article><div class="stat">{{ randomized }}</div>рандомізовано</article>
-  {% if groups %}
-  <article><div class="stat">{{ groups.randomized.A }} / {{ groups.randomized.B }}</div>рандомізовано A / B</article>
-  <article><div class="stat">{{ groups.completed.A }} / {{ groups.completed.B }}</div>завершили A / B</article>
+{% if paused %}
+<div class="banner warn" role="status">
+  <div><strong>Автоматична розсилка на паузі.</strong> Учасники не отримують інструкцій і нагадувань; сесії не закриваються.</div>
+  {% if admin.role == "owner" %}
+  <form method="post" action="/pause" class="inline-form"
+        onsubmit="return confirm('Відновити автоматичну розсилку? Усе пропущене за час паузи буде оброблено на наступному тіку.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="paused" value="false">
+    <button type="submit" class="btn">Відновити розсилку</button>
+  </form>
   {% endif %}
 </div>
-
-<h4>Сьогодні</h4>
-<div class="grid-stats">
-  <article><div class="stat">{{ day.sent }}</div>інструкцій надіслано</article>
-  <article><div class="stat">{{ day.completed }}</div>чек-інів пройдено</article>
-  <article><div class="stat">{{ awaiting }}</div>очікують чек-іну</article>
-  <article><div class="stat">{{ unread }}</div><a href="/participants?flag=unread">непрочитаних повідомлень</a></article>
-</div>
-
-<h4>Проблеми</h4>
-<div class="grid-stats">
-  <article><div class="stat">{{ conflicts_total }}</div>конфліктів кодів</article>
-  <article><div class="stat">{{ blocked }}</div><a href="/participants?flag=blocked">заблокували бота</a></article>
-</div>
-{% if conflicts %}
-<table>
-  <thead><tr><th>Код</th><th>Коли</th></tr></thead>
-  <tbody>
-  {% for event, code in conflicts %}
-  <tr><td><a href="/participants/{{ code }}">{{ code }}</a></td><td>{{ local(event.at) }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-<p class="muted">Конфлікт — спроба зареєструвати вже використаний код з іншого акаунта Telegram.</p>
 {% endif %}
 
-<h4>Система</h4>
-<p>Останній бекап у Telegram: <strong>{{ local(last_backup) }}</strong></p>
-<p>Автоматична розсилка: <strong>{{ "на паузі" if paused else "працює" }}</strong></p>
-{% if admin.role == "owner" %}
-<form method="post" action="/pause"
-      onsubmit="return confirm('{{ 'Відновити автоматичну розсилку? Усе пропущене буде оброблено на наступному тіку.' if paused else 'Призупинити ВСІ автоматичні повідомлення учасникам?' }}');">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <input type="hidden" name="paused" value="{{ 'false' if paused else 'true' }}">
-  <button type="submit" class="{{ '' if paused else 'secondary' }}">{{ "Відновити" if paused else "Пауза" }}</button>
-</form>
-{% endif %}
+<div class="stack">
+  <section aria-labelledby="att">
+    <h2 id="att">Потребує уваги</h2>
+    <div class="attention">
+      {% set tiles = [
+        ("/participants?flag=unread", attention.unread, "Непрочитані повідомлення", "учасників написали і чекають на відповідь"),
+        ("/participants?flag=not_done_today", attention.not_done_today, "Не пройшли сьогодні", "інструкцію надіслано, опитування ще відкрите"),
+        ("/participants?flag=missed_streak", attention.missed_streak, "Пропустили 2+ дні поспіль", "варто написати і підтримати"),
+        ("/participants?flag=blocked", blocked, "Заблокували бота", "повідомлення їм не доходять"),
+      ] %}
+      {% for href, n, title, desc in tiles %}
+      <a href="{{ href }}" class="card alert-tile {{ 'is-hot' if n else 'is-zero' }}">
+        <div class="n">{{ n }}</div>
+        <div><div class="t">{{ title }}</div><div class="d">{{ desc }}</div></div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section aria-labelledby="ppl">
+    <h2 id="ppl">Учасники</h2>
+    <div class="kpis">
+      <a href="/participants" class="card kpi"><div class="value">{{ total }}</div><div class="label">усього</div></a>
+      <a href="/participants?status=active" class="card kpi"><div class="value">{{ counts.active }}</div><div class="label">активні</div></a>
+      <a href="/participants?status=completed" class="card kpi"><div class="value">{{ counts.completed }}</div><div class="label">завершили</div></a>
+      <a href="/participants?flag=not_started" class="card kpi"><div class="value">{{ attention.not_started }}</div><div class="label">ще не стартували</div>
+        <div class="hint">{{ counts.registered }} без згоди · {{ counts.consented }} без старту</div></a>
+      <a href="/participants?status=withdrawn" class="card kpi"><div class="value">{{ counts.withdrawn }}</div><div class="label">вибули</div>
+        <div class="hint">ще {{ counts.declined }} не погодились</div></a>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card card-pad" aria-labelledby="today">
+      <h2 id="today">Сьогодні</h2>
+      {% set done = day.completed %}{% set waiting = awaiting %}{% set base = [day.sent, done + waiting, 1]|max %}
+      <p><span style="font-size:22px;font-weight:650">{{ done }}</span> <span class="muted">з {{ day.sent }} надісланих інструкцій уже пройшли опитування</span></p>
+      <div class="meter" role="img" aria-label="Пройдено {{ done }}, очікують {{ waiting }}">
+        <span class="ok" style="width: {{ (done / base * 100)|round(1) }}%"></span>
+        <span class="info" style="width: {{ (waiting / base * 100)|round(1) }}%"></span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>чек-інів пройдено: {{ done }}</span>
+        <span><i style="background:var(--info)"></i>очікують чек-іну: {{ waiting }}</span>
+        <span><i style="background:var(--muted-soft);border:1px solid var(--border-strong)"></i>інструкцій надіслано: {{ day.sent }}</span>
+      </div>
+    </section>
+
+    <section class="card card-pad" aria-labelledby="rnd">
+      <h2 id="rnd">Рандомізація</h2>
+      <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr))">
+        <div><div style="font-size:22px;font-weight:650">{{ randomized }}</div><div class="muted">рандомізовано</div></div>
+        {% if groups %}
+        <div><div style="font-size:22px;font-weight:650">{{ groups.randomized.A }} / {{ groups.randomized.B }}</div><div class="muted">рандомізовано A / B</div></div>
+        <div><div style="font-size:22px;font-weight:650">{{ groups.completed.A }} / {{ groups.completed.B }}</div><div class="muted">завершили A / B</div></div>
+        {% endif %}
+      </div>
+      {% if groups %}<p class="faint small" style="margin-top:10px">Розбиття за групами бачить лише owner.</p>{% endif %}
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card" aria-labelledby="cnf">
+      <div class="card-head"><h2 id="cnf">Конфлікти кодів</h2><span class="tag">{{ conflicts_total }}</span></div>
+      {% if conflicts %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Код</th><th>Коли</th></tr></thead>
+        <tbody>
+        {% for event, code in conflicts %}
+        <tr><td class="code"><a href="/participants/{{ code }}">{{ code }}</a></td><td class="muted">{{ local(event.at) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <p class="faint small card-pad" style="padding-top:10px">Хтось спробував зареєструвати вже використаний код з іншого акаунта Telegram.</p>
+      {% else %}
+      <div class="empty">Конфліктів немає.</div>
+      {% endif %}
+    </section>
+
+    <section class="card card-pad" aria-labelledby="sys">
+      <h2 id="sys">Система</h2>
+      <dl class="facts">
+        <div><dt>Останній бекап у Telegram</dt><dd>{{ local(last_backup) }}</dd></div>
+        <div><dt>Автоматична розсилка</dt><dd>{% if paused %}<span class="badge danger">на паузі</span>{% else %}<span class="badge s-completed">працює</span>{% endif %}</dd></div>
+      </dl>
+      {% if admin.role == "owner" and not paused %}
+      <form method="post" action="/pause" style="margin-top:16px"
+            onsubmit="return confirm('Призупинити ВСІ автоматичні повідомлення учасникам (інструкції, нагадування, фінальні посилання)?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="paused" value="true">
+        <button type="submit" class="btn danger">Призупинити розсилку</button>
+      </form>
+      {% endif %}
+    </section>
+  </div>
+</div>
 {% endblock %}

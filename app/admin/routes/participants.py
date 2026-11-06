@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.auth import current_admin, get_ctx, require_owner
-from app.admin.overview import CELL_TITLES, apply_filters, load_rows
+from app.admin.overview import CELL_TITLES, apply_filters, cell, load_rows
 from app.admin.web import STATUS_LABELS, flash, redirect, render
 from app.clock import clock
 from app.db.models import (
@@ -48,13 +48,17 @@ async def participants_list(
 ) -> Response:
     ctx = get_ctx(request)
     async with ctx.read() as session:
-        rows = await load_rows(session, clock.now())
-    rows = apply_filters(rows, status=status, flag=flag, q=q)
-    return render(
+        all_rows = await load_rows(session, clock.now())
+    rows = apply_filters(all_rows, status=status, flag=flag, q=q)
+    # Лічильники для швидких фільтрів (з урахуванням вибраного статусу і пошуку).
+    flag_counts = {key: len(apply_filters(all_rows, status=status, flag=key, q=q)) for key in FILTERS}
+    return await render(
         request,
         "participants.html",
         admin,
         rows=rows,
+        total=len(all_rows),
+        flag_counts=flag_counts,
         statuses=STATUS_LABELS,
         filters=FILTERS,
         status=status,
@@ -152,12 +156,14 @@ async def participant_card(request: Request, code: str, admin: AdminUser = Depen
                 .values(read_by_admin_at=clock.now())
             )
 
-    return render(
+    return await render(
         request,
         "participant.html",
         admin,
         participant=participant,
         sessions=sessions,
+        cells=[cell(s, clock.now()) for s in sessions],
+        cell_titles=CELL_TITLES,
         answers=answers_by_session,
         chat=chat,
         events=events,

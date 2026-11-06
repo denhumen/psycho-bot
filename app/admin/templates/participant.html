@@ -1,101 +1,118 @@
 {% extends "base.html" %}
 {% block title %}{{ participant.code }}{% endblock %}
+{% set cell_class = {"●": "c-done", "✕": "c-missed", "○": "c-waiting", "·": "c-none"} %}
+{% set kind_labels = {"instruction": "бот · інструкція", "checkin": "бот · опитування", "auto_reminder": "бот · авто-нагадування",
+                      "system": "бот", "participant_text": "учасник"} %}
 {% block content %}
-<h2>Учасник {{ participant.code }}</h2>
-
-<div class="grid">
-  <article>
-    <p>Статус: <strong>{{ status_label(participant.status) }}</strong>
-      {% if participant.bot_blocked %}<br><span class="flash-error">Учасник заблокував бота</span>{% endif %}</p>
-    <p>Час нагадувань: <strong>{{ participant.reminder_time or "—" }}</strong></p>
-    <p>Остання активність: {{ local(participant.last_activity_at) }}</p>
-  </article>
-  <article>
-    <small>
-      Зареєстрований: {{ local(participant.created_at) }}<br>
-      Згода: {{ local(participant.consented_at) }}<br>
-      Старт: {{ local(participant.randomized_at) }}{% if participant.start_date %} (перший день {{ participant.start_date.strftime("%d.%m.%Y") }}){% endif %}<br>
-      Завершив: {{ local(participant.completed_at) }}<br>
-      Фінальна анкета надіслана: {{ local(participant.post_survey_sent_at) }}<br>
-      Вибув: {{ local(participant.withdrawn_at) }}
-    </small>
-  </article>
-</div>
-
-<h4>7 днів</h4>
-<div class="overflow-auto">
-<table>
-  <thead><tr><th>День</th><th>Заплановано</th><th>Надіслано</th><th>Нагадування</th><th>Результат</th><th>Відповіді</th></tr></thead>
-  <tbody>
-  {% for s in sessions %}
-    <tr>
-      <td>{{ s.day }}</td>
-      <td>{{ local(s.scheduled_for) }}</td>
-      <td>{{ local(s.sent_at) }}</td>
-      <td>{{ local(s.reminder_sent_at) }}</td>
-      <td>
-        {% if s.completed_at %}● пройдено {{ local(s.completed_at) }}
-        {% elif s.missed_at %}✕ пропущено
-        {% elif s.sent_at and s.deadline > now %}○ очікує до {{ local(s.deadline) }}
-        {% elif s.sent_at %}✕ дедлайн минув
-        {% else %}·{% endif %}
-      </td>
-      <td>{% for qid, label in answers.get(s.id, []) %}{{ qid }}: <strong>{{ label }}</strong>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-    </tr>
-  {% else %}
-    <tr><td colspan="6" class="muted">Учасник ще не стартував.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-</div>
-
-<h4>Переписка</h4>
-<article>
-  <div class="chat">
-  {% for line in chat %}
-    <div class="bubble {{ line.message.direction }}{% if line.unread %} unread{% endif %}">
-      <small>{{ local(line.message.created_at) }}{% if line.author %} · {{ line.author }}{% endif %}{% if line.unread %} · нове{% endif %}</small>{{ line.text }}</div>
-  {% else %}
-    <p class="muted">Повідомлень ще немає.</p>
-  {% endfor %}
+<p class="small" style="margin-bottom:8px"><a href="/participants">← Усі учасники</a></p>
+<div class="page-head">
+  <div class="row" style="gap:12px">
+    <h1>{{ participant.code }}</h1>
+    <span class="badge s-{{ participant.status }}">{{ status_label(participant.status) }}</span>
+    {% if participant.bot_blocked %}<span class="badge danger">учасник заблокував бота</span>{% endif %}
   </div>
-</article>
-<script>document.querySelector(".chat").scrollTop = 1e9;</script>
-
-<h4>Написати</h4>
-{% if can_message %}
-<form method="post" action="/participants/{{ participant.code }}/message">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  {% if reminder_templates %}
-  <select id="template" aria-label="Шаблон" onchange="if (this.value) document.getElementById('text').value = this.options[this.selectedIndex].dataset.text;">
-    <option value="">— шаблон —</option>
-    {% for t in reminder_templates %}<option value="{{ t.id }}" data-text="{{ t.text }}">{{ t.title }}</option>{% endfor %}
-  </select>
+  {% if can_withdraw %}
+  <form method="post" action="/participants/{{ participant.code }}/withdraw" class="inline-form"
+        onsubmit="return confirm('Позначити учасника {{ participant.code }} як вибулого? Автоматичні повідомлення йому припиняться. Дані залишаться.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn danger sm">Позначити як вибув</button>
+  </form>
   {% endif %}
-  <textarea id="text" name="text" rows="4" required placeholder="Текст повідомлення учаснику"></textarea>
-  <button type="submit">Надіслати через бота</button>
-</form>
-{% else %}
-<p class="flash-error">Учасник {{ status_label(participant.status) }} — надсилати повідомлення не можна.</p>
-{% endif %}
+</div>
 
-{% if can_withdraw %}
-<h4>Керування</h4>
-<form method="post" action="/participants/{{ participant.code }}/withdraw"
-      onsubmit="return confirm('Позначити учасника {{ participant.code }} як вибулого? Автоматичні повідомлення припиняться.');">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="submit" class="secondary outline">Позначити як вибув</button>
-</form>
-{% endif %}
+<div class="card card-pad" style="margin-bottom:16px">
+  <dl class="facts" style="margin:0">
+    <div><dt>Час нагадувань</dt><dd>{{ participant.reminder_time or "—" }}</dd></div>
+    <div><dt>Остання активність</dt><dd>{{ local(participant.last_activity_at) }}</dd></div>
+    <div><dt>Зареєстрований</dt><dd>{{ local(participant.created_at) }}</dd></div>
+    <div><dt>Згода</dt><dd>{{ local(participant.consented_at) }}</dd></div>
+    <div><dt>Старт</dt><dd>{{ local(participant.randomized_at) }}{% if participant.start_date %}<div class="faint small">перший день {{ participant.start_date.strftime("%d.%m.%Y") }}</div>{% endif %}</dd></div>
+    <div><dt>Завершив</dt><dd>{{ local(participant.completed_at) }}</dd></div>
+    <div><dt>Фінальна анкета</dt><dd>{{ local(participant.post_survey_sent_at) }}</dd></div>
+    <div><dt>Вибув</dt><dd>{{ local(participant.withdrawn_at) }}</dd></div>
+  </dl>
+</div>
 
-<details>
-  <summary>Журнал подій</summary>
+<div class="grid-main">
+  <section class="card" aria-labelledby="days">
+    <div class="card-head">
+      <h2 id="days">7 днів</h2>
+      {% if cells %}<span class="cells" aria-hidden="true">{% for c in cells %}<span class="{{ cell_class[c] }}">{{ c }}</span>{% endfor %}</span>{% endif %}
+    </div>
+    {% if sessions %}
+    <ol class="timeline">
+      {% for s in sessions %}{% set c = cells[loop.index0] %}
+      <li>
+        <span class="day {{ cell_class[c] }}" title="{{ cell_titles[c] }}">{{ s.day }}</span>
+        <div>
+          <div class="top">
+            <strong>
+              {% if s.completed_at %}Пройдено {{ local(s.completed_at) }}
+              {% elif s.missed_at %}Пропущено
+              {% elif s.sent_at and s.deadline > now %}Очікує відповіді до {{ local(s.deadline) }}
+              {% elif s.sent_at %}Дедлайн минув
+              {% else %}Ще не надіслано{% endif %}
+            </strong>
+          </div>
+          <div class="meta">
+            Заплановано {{ local(s.scheduled_for) }}{% if s.sent_at %} · надіслано {{ local(s.sent_at, "%H:%M") }}{% endif %}{% if s.reminder_sent_at %} · нагадування {{ local(s.reminder_sent_at, "%H:%M") }}{% endif %}
+          </div>
+          {% if answers.get(s.id) %}
+          <div class="answers">{% for qid, label in answers.get(s.id, []) %}<span class="tag">{{ qid }}: <strong>{{ label }}</strong></span>{% endfor %}</div>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <div class="empty">Учасник ще не натиснув «Готовий почати» — сесій немає.</div>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="chat-h">
+    <div class="card-head"><h2 id="chat-h">Переписка</h2><span class="faint small">{{ chat|length }} повідомлень</span></div>
+    <div class="chat" id="chat">
+    {% for line in chat %}
+      <div class="bubble {{ line.message.direction }}{% if line.unread %} unread{% endif %}">
+        <small>{{ line.author or kind_labels.get(line.message.kind, "бот") }} · {{ local(line.message.created_at) }}{% if line.unread %} · <strong>нове</strong>{% endif %}</small>{{ line.text }}</div>
+    {% else %}
+      <p class="faint" style="text-align:center;margin:24px 0">Повідомлень ще немає.</p>
+    {% endfor %}
+    </div>
+    <div class="composer">
+    {% if can_message %}
+      <form method="post" action="/participants/{{ participant.code }}/message">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if reminder_templates %}
+        <label><span class="small muted">Шаблон (підставиться в поле, текст можна змінити)</span>
+          <select id="template" onchange="if (this.value) { var t = document.getElementById('text'); t.value = this.options[this.selectedIndex].dataset.text; t.focus(); }">
+            <option value="">Без шаблону</option>
+            {% for t in reminder_templates %}<option value="{{ t.id }}" data-text="{{ t.text }}">{{ t.title }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <textarea id="text" name="text" rows="3" required placeholder="Повідомлення учаснику — надійде від імені бота"></textarea>
+        <div class="row end" style="margin-top:10px"><button type="submit" class="btn">Надіслати через бота</button></div>
+      </form>
+    {% else %}
+      <div class="note warn">Учасник {{ status_label(participant.status) }} — надсилати повідомлення не можна.</div>
+    {% endif %}
+    </div>
+  </section>
+</div>
+
+<details class="card events" style="margin-top:16px">
+  <summary>Журнал подій <span class="faint small">(останні {{ events|length }})</span></summary>
+  <div class="table-wrap">
   <table>
+    <thead><tr><th>Коли</th><th>Подія</th><th>Хто</th><th>Деталі</th></tr></thead>
     <tbody>
     {% for e in events %}
-      <tr><td>{{ local(e.at) }}</td><td>{{ e.type }}</td><td>{{ e.actor }}</td><td><small>{{ e.payload | tojson }}</small></td></tr>
+      <tr><td class="muted">{{ local(e.at) }}</td><td>{{ e.type }}</td><td class="muted">{{ e.actor }}</td><td><code>{{ e.payload | tojson }}</code></td></tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </details>
+<script>var c = document.getElementById("chat"); if (c) c.scrollTop = c.scrollHeight;</script>
 {% endblock %}

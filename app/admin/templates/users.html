@@ -1,49 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Користувачі{% endblock %}
 {% block content %}
-<h2>Користувачі адмінки</h2>
-<div class="overflow-auto">
-<table>
-  <thead><tr><th>Логін</th><th>Роль</th><th>Активний</th><th>Останній вхід</th><th></th><th>Новий пароль</th></tr></thead>
-  <tbody>
-  {% for user in users %}
-  <tr>
-    <td>{{ user.username }}</td>
-    <td>{{ user.role }}</td>
-    <td>{{ "так" if user.is_active else "ні" }}</td>
-    <td>{{ local(user.last_login_at) }}</td>
-    <td>
-      {% if user.id != admin.id %}
-      <form method="post" action="/users/{{ user.id }}/active" style="margin:0">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}">
-        <button type="submit" class="secondary outline" style="margin:0">{{ "Деактивувати" if user.is_active else "Активувати" }}</button>
-      </form>
-      {% endif %}
-    </td>
-    <td>
-      <form method="post" action="/users/{{ user.id }}/password" style="margin:0;display:flex;gap:.5rem">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="password" name="password" minlength="10" required autocomplete="new-password" aria-label="Новий пароль" style="margin:0">
-        <button type="submit" class="outline" style="margin:0">Змінити</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="page-head">
+  <div>
+    <h1>Користувачі адмінки</h1>
+    <div class="sub"><strong>researcher</strong> — учасники, переписка, шаблони (без груп). <strong>owner</strong> — усе, включно з кодами, експортом, бекапом і користувачами.</div>
+  </div>
 </div>
 
-<h4>Новий користувач</h4>
-<form method="post" action="/users">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <div class="grid">
-    <input name="username" placeholder="Логін" required autocomplete="off">
-    <input type="password" name="password" placeholder="Пароль (від 10 символів)" minlength="10" required autocomplete="new-password">
-    <select name="role" aria-label="Роль">
-      {% for role in roles %}<option value="{{ role }}" {% if role == "researcher" %}selected{% endif %}>{{ role }}</option>{% endfor %}
-    </select>
-    <button type="submit">Створити</button>
-  </div>
-</form>
+<div class="grid-main">
+  <section class="card" aria-labelledby="list-u">
+    <div class="card-head"><h2 id="list-u">Усі користувачі</h2><span class="tag">{{ users|length }}</span></div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Логін</th><th>Роль</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
+      <tbody>
+      {% for user in users %}
+      <tr>
+        <td class="code">{{ user.username }}{% if user.id == admin.id %} <span class="faint small">(ви)</span>{% endif %}</td>
+        <td><span class="tag">{{ user.role }}</span></td>
+        <td>{% if user.is_active %}<span class="badge s-completed">активний</span>{% else %}<span class="badge s-withdrawn">вимкнено</span>{% endif %}</td>
+        <td class="muted">{{ local(user.last_login_at) }}</td>
+        <td>
+          <details>
+            <summary class="btn ghost sm">Дії</summary>
+            <div class="stack" style="padding:10px 0;min-width:240px">
+              <form method="post" action="/users/{{ user.id }}/password" class="row">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="password" name="password" minlength="10" required autocomplete="new-password" placeholder="Новий пароль" aria-label="Новий пароль для {{ user.username }}" style="flex:1">
+                <button type="submit" class="btn secondary sm">Змінити пароль</button>
+              </form>
+              {% if user.id != admin.id %}
+              <form method="post" action="/users/{{ user.id }}/active"
+                    onsubmit="return confirm('{{ ('Вимкнути доступ для ' if user.is_active else 'Увімкнути доступ для ') ~ user.username }}?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}">
+                <button type="submit" class="btn {{ 'danger' if user.is_active else 'secondary' }} sm">{{ "Деактивувати" if user.is_active else "Активувати" }}</button>
+              </form>
+              {% endif %}
+            </div>
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="card card-pad" aria-labelledby="new-u">
+    <h2 id="new-u">Новий користувач</h2>
+    <form method="post" action="/users">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label><span>Логін</span><input name="username" required autocomplete="off"></label>
+      <label><span>Тимчасовий пароль <span class="faint small">(від 10 символів)</span></span>
+        <input type="password" name="password" minlength="10" required autocomplete="new-password"></label>
+      <label><span>Роль</span>
+        <select name="role">
+          {% for role in roles %}<option value="{{ role }}" {% if role == "researcher" %}selected{% endif %}>{{ role }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn">Створити користувача</button>
+      <p class="faint small" style="margin-top:10px">Передайте логін і пароль людині окремим захищеним каналом.</p>
+    </form>
+  </section>
+</div>
 {% endblock %}

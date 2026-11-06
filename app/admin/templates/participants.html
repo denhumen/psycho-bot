@@ -1,48 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Учасники{% endblock %}
+{% set cell_class = {"●": "c-done", "✕": "c-missed", "○": "c-waiting", "·": "c-none"} %}
+{% macro qs(f) -%}
+?{% if status %}status={{ status }}&amp;{% endif %}{% if q %}q={{ q|urlencode }}&amp;{% endif %}flag={{ f }}
+{%- endmacro %}
 {% block content %}
-<h2>Учасники</h2>
-<form method="get" action="/participants">
-  <div class="grid">
+<div class="page-head">
+  <div>
+    <h1>Учасники</h1>
+    <div class="sub">{{ total }} у базі дослідження</div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/participants" class="toolbar" role="search">
+    <input type="hidden" name="flag" value="{{ flag }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Пошук за кодом" aria-label="Пошук за кодом">
     <select name="status" aria-label="Статус">
-      <option value="">усі статуси</option>
+      <option value="">Усі статуси</option>
       {% for value, label in statuses.items() %}
       <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <select name="flag" aria-label="Фільтр">
-      {% for value, label in filters.items() %}
-      <option value="{{ value }}" {% if value == flag %}selected{% endif %}>{{ label }}</option>
+    <button type="submit" class="btn secondary">Застосувати</button>
+    {% if status or flag or q %}<a href="/participants" class="btn ghost">Скинути все</a>{% endif %}
+  </form>
+
+  <nav class="chips" aria-label="Швидкі фільтри">
+    {% for value, label in filters.items() %}
+    <a href="/participants{{ qs(value) }}" class="chip {{ 'on' if value == flag }}">{{ label }} <span class="k">{{ flag_counts[value] }}</span></a>
+    {% endfor %}
+  </nav>
+
+  <div class="result-line">
+    <span>Знайдено: <strong>{{ rows|length }}</strong></span>
+    <span class="legend-cells" aria-label="Позначення прогресу">
+      {% for symbol, title in cell_titles.items() %}
+      <span><span class="cells"><span class="{{ cell_class[symbol] }}" aria-hidden="true">{{ symbol }}</span></span> {{ title }}</span>
       {% endfor %}
-    </select>
-    <input type="search" name="q" value="{{ q }}" placeholder="Пошук за кодом">
-    <button type="submit">Показати</button>
+    </span>
   </div>
-</form>
 
-<p class="muted">Прогрес:
-  {% for symbol, title in cell_titles.items() %}{{ symbol }} {{ title }}{% if not loop.last %}, {% endif %}{% endfor %}.
-  Знайдено: {{ rows|length }}.</p>
-
-<div class="overflow-auto">
-<table class="striped">
-  <thead>
-    <tr><th>Код</th><th>Статус</th><th>День</th><th>Прогрес</th><th>Остання активність</th><th>Непрочитані</th></tr>
-  </thead>
-  <tbody>
-  {% for row in rows %}
-    <tr>
-      <td><a href="/participants/{{ row.participant.code }}">{{ row.participant.code }}</a>{% if row.participant.bot_blocked %} 🚫{% endif %}</td>
-      <td>{{ status_label(row.participant.status) }}</td>
-      <td>{{ row.day }}/{{ days }}</td>
-      <td class="cells">{% for c in row.cells %}<span title="День {{ loop.index }}: {{ cell_titles[c] }}">{{ c }}</span>{% endfor %}</td>
-      <td>{{ local(row.participant.last_activity_at) }}</td>
-      <td>{% if row.unread %}<span class="badge">{{ row.unread }}</span>{% endif %}</td>
-    </tr>
-  {% else %}
-    <tr><td colspan="6" class="muted">Нікого не знайдено.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Код</th><th>Статус</th><th class="num col-opt">День</th><th>Прогрес за 7 днів</th><th class="col-opt">Остання активність</th><th class="num">Нові</th></tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td class="code"><a href="/participants/{{ row.participant.code }}" title="{{ row.participant.code }}">{{ row.participant.code }}</a></td>
+        <td><span class="badge s-{{ row.participant.status }}">{{ status_label(row.participant.status) }}</span>
+          {% if row.participant.bot_blocked %}<span class="badge danger" title="Учасник заблокував бота">бот заблоковано</span>{% endif %}</td>
+        <td class="num col-opt">{{ row.day }}/{{ days }}</td>
+        <td><span class="cells">{% for c in row.cells %}<span title="День {{ loop.index }}: {{ cell_titles[c] }}" class="{{ cell_class[c] }}">{{ c }}</span>{% endfor %}</span></td>
+        <td class="muted col-opt" title="{{ local(row.participant.last_activity_at) }}">{{ ago(row.participant.last_activity_at) }}</td>
+        <td class="num">{% if row.unread %}<span class="count">{{ row.unread }}</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><div class="empty">
+        За цими фільтрами нікого немає.{% if status or flag or q %} <a href="/participants">Скинути фільтри</a>{% endif %}
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
 </div>
 {% endblock %}

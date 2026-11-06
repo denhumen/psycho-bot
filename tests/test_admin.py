@@ -194,7 +194,7 @@ async def test_participant_filters(settings: Settings, ctx: AppContext) -> None:
         assert codes("status=registered") == {"WAIT03"}
         assert codes("q=miss") == {"MISS02"}
         page = client.get("/participants?q=PEND").text
-        cells = re.findall(r'<span title="День \d: [^"]+">(.)</span>', page)
+        cells = re.findall(r'<span title="День \d: [^"]+"[^>]*>(.)</span>', page)
         assert "3/7" in page and "".join(cells) == "✕●○····"
 
 

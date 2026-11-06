@@ -21,7 +21,7 @@ LOGIN_WINDOW = timedelta(minutes=15)
 async def login_form(request: Request) -> Response:
     if request.session.get("admin_id"):
         return redirect("/")
-    return render(request, "login.html")
+    return await render(request, "login.html")
 
 
 @router.post("/login")
@@ -43,13 +43,13 @@ async def login(request: Request, username: str = Form(""), password: str = Form
         ).scalar_one()
         admin = await by_username(session, username)
     if failures >= LOGIN_ATTEMPTS:
-        return render(request, "login.html", error="Забагато спроб. Спробуйте через 15 хвилин.", status_code=429)
+        return await render(request, "login.html", error="Забагато спроб. Спробуйте через 15 хвилин.", status_code=429)
 
     valid = verify_password(admin.password_hash if admin else None, password)
     if admin is None or not admin.is_active or not valid:
         async with ctx.db() as session, session.begin():
             log_event(session, "admin_login_failed", username=username)
-        return render(request, "login.html", error="Невірний логін або пароль.", status_code=401)
+        return await render(request, "login.html", error="Невірний логін або пароль.", status_code=401)
 
     async with ctx.db() as session, session.begin():
         stored = await session.get(AdminUser, admin.id)

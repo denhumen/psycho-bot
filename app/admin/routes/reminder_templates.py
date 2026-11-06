@@ -15,7 +15,7 @@ router = APIRouter()
 async def list_templates(request: Request, admin: AdminUser = Depends(current_admin)) -> Response:
     async with get_ctx(request).read() as session:
         items = (await session.execute(select(ReminderTemplate).order_by(ReminderTemplate.title))).scalars().all()
-    return render(request, "templates.html", admin, items=items)
+    return await render(request, "templates.html", admin, items=items)
 
 
 @router.post("/templates")

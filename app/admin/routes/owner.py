@@ -35,7 +35,7 @@ async def codes_page(request: Request, admin: AdminUser = Depends(require_owner)
     async with ctx.read() as session:
         total, used = await code_stats(session)
     report = request.session.pop("codes_report", None)
-    return render(
+    return await render(
         request,
         "codes.html",
         admin,
@@ -86,7 +86,7 @@ async def codes_upload(
 
 @router.get("/export")
 async def export_page(request: Request, admin: AdminUser = Depends(require_owner)) -> Response:
-    return render(request, "export.html", admin)
+    return await render(request, "export.html", admin)
 
 
 @router.post("/export")
@@ -108,7 +108,7 @@ async def backup_page(request: Request, admin: AdminUser = Depends(require_owner
     ctx = get_ctx(request)
     async with ctx.read() as session:
         last = await get_time(session, LAST_BACKUP_AT)
-    return render(request, "backup.html", admin, last_backup=last, chat_configured=ctx.settings.backup_chat_id is not None)
+    return await render(request, "backup.html", admin, last_backup=last, chat_configured=ctx.settings.backup_chat_id is not None)
 
 
 @router.post("/backup/download")
@@ -146,7 +146,7 @@ async def backup_send(request: Request, admin: AdminUser = Depends(require_owner
 async def users_page(request: Request, admin: AdminUser = Depends(require_owner)) -> Response:
     async with get_ctx(request).read() as session:
         users = (await session.execute(select(AdminUser).order_by(AdminUser.username))).scalars().all()
-    return render(request, "users.html", admin, users=users, roles=ROLES)
+    return await render(request, "users.html", admin, users=users, roles=ROLES)
 
 
 @router.post("/users")

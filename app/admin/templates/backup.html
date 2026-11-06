@@ -1,18 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Бекап{% endblock %}
 {% block content %}
-<h2>Бекап бази даних</h2>
-<p>Останній бекап у Telegram: <strong>{{ local(last_backup) }}</strong></p>
-<p class="muted">Копія робиться через SQLite backup API — узгоджений знімок без зупинки бота. Файл містить усі дані, зокрема розподіл за групами.</p>
-<div class="grid">
-  <form method="post" action="/backup/download">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit">Завантажити копію БД</button>
-  </form>
-  <form method="post" action="/backup/send">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="secondary" {% if not chat_configured %}disabled title="BACKUP_CHAT_ID не задано"{% endif %}>
-      Надіслати бекап у Telegram зараз</button>
-  </form>
+<div class="page-head">
+  <div>
+    <h1>Бекап бази даних</h1>
+    <div class="sub">Узгоджений знімок через SQLite backup API, без зупинки бота.</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card card-pad" aria-labelledby="dl">
+    <h2 id="dl">Завантажити копію</h2>
+    <p class="muted">Файл <code>.db</code>, з якого можна підняти застосунок або відтворити проблему локально. Містить усі дані, зокрема групи й контакти.</p>
+    <form method="post" action="/backup/download" style="margin-top:14px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Завантажити копію БД</button>
+    </form>
+  </section>
+
+  <section class="card card-pad" aria-labelledby="tg">
+    <h2 id="tg">Бекап у Telegram</h2>
+    <dl class="facts" style="margin-bottom:14px">
+      <div><dt>Останній бекап у Telegram</dt><dd>{{ local(last_backup) }}</dd></div>
+      <div><dt>Автоматично</dt><dd>щоночі о BACKUP_TIME</dd></div>
+    </dl>
+    {% if chat_configured %}
+    <form method="post" action="/backup/send">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn secondary">Надіслати бекап у Telegram зараз</button>
+    </form>
+    {% else %}
+    <div class="note warn">BACKUP_CHAT_ID не задано — бекапи в Telegram вимкнено.</div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
