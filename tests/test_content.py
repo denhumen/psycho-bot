@@ -31,8 +31,9 @@ def test_real_content_is_valid() -> None:
     assert content.instructions.text("B", 7)
     assert [q.id for q in content.checkin.questions] == ["did_write", "mood"]
     assert "@support" in content.t("help")
-    # Плейсхолдерні тексти позначені — при старті буде попередження.
-    assert "texts.consent" in content.todo_markers()
+    # Учасники ніколи не бачать службових позначок.
+    for key, value in content.texts:
+        assert "TODO" not in (value if isinstance(value, str) else value.text), key
 
 
 def test_broken_json(tmp_path: Path) -> None:

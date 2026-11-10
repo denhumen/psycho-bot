@@ -15,7 +15,6 @@ NonEmpty = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)
 # Ідентифікатори йдуть у callback_data (ліміт Telegram — 64 байти).
 Ident = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]{1,20}$")]
 
-TODO_MARKER = "TODO"
 
 
 class ContentError(RuntimeError):
@@ -311,21 +310,6 @@ class Content(BaseModel):
             return None
         value = getattr(self.texts, key)
         return value if isinstance(value, RichText) else None
-
-    def todo_markers(self) -> list[str]:
-        found = [
-            f"texts.{key}"
-            for key, value in self.texts
-            if TODO_MARKER in (value.text if isinstance(value, RichText) else value)
-        ]
-        found += [f"checkin.{q.id}" for q in self.checkin.questions if TODO_MARKER in q.text]
-        found += [
-            f"instructions.{group}.{day}"
-            for group, days in self.instructions.root.items()
-            for day, value in days.items()
-            if TODO_MARKER in value
-        ]
-        return found
 
 
 def _read(path: Path, model: type[BaseModel]) -> Any:
