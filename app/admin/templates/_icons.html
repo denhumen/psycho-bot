@@ -1,0 +1,30 @@
+{% macro icon(name) -%}
+<svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+{%- if name == "pen" %}<path d="M10.5 2.5l3 3-8 8H2.5v-3z"></path>
+{%- elif name == "more" %}<circle cx="3.5" cy="8" r=".9"></circle><circle cx="8" cy="8" r=".9"></circle><circle cx="12.5" cy="8" r=".9"></circle>
+{%- elif name == "back" %}<path d="M10 3.5 5.5 8l4.5 4.5"></path>
+{%- elif name == "chev" %}<path d="m6 3.5 4.5 4.5L6 12.5"></path>
+{%- elif name == "close" %}<path d="m3.5 3.5 4.5 4.5-4.5 4.5M8.5 3.5 13 8l-4.5 4.5"></path>
+{%- elif name == "expand" %}<path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"></path>
+{%- elif name == "up" %}<path d="M3.5 10 8 5.5l4.5 4.5"></path>
+{%- elif name == "down" %}<path d="M3.5 6 8 10.5 12.5 6"></path>
+{%- elif name == "plus" %}<path d="M8 3v10M3 8h10"></path>
+{%- elif name == "download" %}<path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"></path>
+{%- elif name == "search" %}<circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3 3"></path>
+{%- elif name == "doc" %}<path d="M4 2.5h5l3 3v8H4z"></path><path d="M9 2.5v3h3"></path>
+{%- elif name == "warn" %}<path d="M8 2.5 14 13H2z"></path><path d="M8 6.5v3M8 11.3v.2"></path>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{# Меню ⋯: <details> працює без JS. #}
+{% macro more_menu(label) -%}
+<details class="menu-wrap">
+  <summary class="btn icon" aria-label="{{ label }}">{{ icon("more") }}</summary>
+  <div class="menu">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{% macro week(cells) -%}
+<span class="week">{% for c in cells %}<i class="{{ WEEK_CLASS[c] }}" title="День {{ loop.index }}: {{ CELL_TITLES[c] }}">{{ WEEK_GLYPH[c] }}</i>{% endfor %}</span>
+{%- endmacro %}

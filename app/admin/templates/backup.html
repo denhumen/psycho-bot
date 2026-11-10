@@ -1,37 +1,45 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Бекап{% endblock %}
+{% block main_attrs %} style="max-width:1040px"{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Бекап бази даних</h1>
-    <div class="sub">Узгоджений знімок через SQLite backup API, без зупинки бота.</div>
+<div class="head">
+  <h1>Бекап бази даних</h1>
+  <div class="actions">
+    {% if chat_configured %}
+    <form method="post" action="/backup/send" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Надіслати в Telegram</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/backup/download" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn primary">{{ icon("download") }}Завантажити файл</button>
+    </form>
   </div>
 </div>
-
-<div class="grid-2">
-  <section class="card card-pad" aria-labelledby="dl">
-    <h2 id="dl">Завантажити копію</h2>
-    <p class="muted">Файл <code>.db</code>, з якого можна підняти застосунок або відтворити проблему локально. Містить усі дані, зокрема групи й контакти.</p>
-    <form method="post" action="/backup/download" style="margin-top:14px">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn">Завантажити копію БД</button>
-    </form>
-  </section>
-
-  <section class="card card-pad" aria-labelledby="tg">
-    <h2 id="tg">Бекап у Telegram</h2>
-    <dl class="facts" style="margin-bottom:14px">
-      <div><dt>Останній бекап у Telegram</dt><dd>{{ local(last_backup) }}</dd></div>
-      <div><dt>Автоматично</dt><dd>щоночі о BACKUP_TIME</dd></div>
-    </dl>
-    {% if chat_configured %}
-    <form method="post" action="/backup/send">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn secondary">Надіслати бекап у Telegram зараз</button>
-    </form>
+{% if not chat_configured %}
+<div class="note att">{{ icon("warn") }}<div>BACKUP_CHAT_ID не задано, нічні копії в Telegram вимкнено. Файл можна завантажити вручну.</div></div>
+{% endif %}
+<section class="panel pad">
+  <dl class="fields">
+    <div><dt>Остання копія в Telegram</dt><dd class="{{ 'faint' if not last_backup }}">{{ local(last_backup) }}</dd></div>
+    <div><dt>Наступна</dt><dd class="{{ 'faint' if not next_backup }}">{{ local(next_backup) }}</dd></div>
+    <div><dt>Розклад</dt><dd>{{ "щоночі о " ~ backup_time if chat_configured else "вимкнено" }}</dd></div>
+    <div><dt>Файл містить</dt><dd>групи і Telegram-контакти</dd></div>
+  </dl>
+</section>
+<section class="panel" aria-labelledby="b-hist">
+  <div class="panel-head"><h2 id="b-hist">Історія</h2></div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Коли</th><th>Що</th><th>Хто</th></tr></thead>
+    <tbody>
+    {% for at, what, who in history %}
+      <tr><td>{{ local(at) }}</td><td>{{ what }}</td><td class="{{ 'muted' if who in ('система', 'командний рядок') }}">{{ who }}</td></tr>
     {% else %}
-    <div class="note warn">BACKUP_CHAT_ID не задано — бекапи в Telegram вимкнено.</div>
-    {% endif %}
-  </section>
-</div>
+      <tr><td colspan="3"><div class="empty">Копій ще не було.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 {% endblock %}

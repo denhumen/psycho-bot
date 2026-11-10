@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Додати коди{% endblock %}
+{% block content %}
+<form method="post" action="/codes" enctype="multipart/form-data" class="stack" style="gap:20px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="head">
+    <div class="head-title">
+      <a href="/codes" class="btn icon ghost" aria-label="До кодів">{{ icon("back") }}</a>
+      <h1>Додати коди</h1>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Завантажити коди</button></div>
+  </div>
+  {% if validation != "whitelist" %}
+  <div class="note att">{{ icon("warn") }}<div>Зараз <span class="mono">CODE_VALIDATION={{ validation }}</span>: список кодів не використовується, поки не ввімкнути whitelist.</div></div>
+  {% endif %}
+  <div class="split">
+    <section class="panel pad stack">
+      <label class="field"><span>Коди, по одному в рядку</span>
+        <textarea class="inp mono" name="codes" rows="12" placeholder="ABC123&#10;XYZ789"></textarea></label>
+    </section>
+    <section class="panel pad stack">
+      <label class="field"><span>Або CSV-файл</span><input type="file" name="file" accept=".csv,.txt,text/csv,text/plain">
+        <span class="hint">Береться перша колонка; рядок заголовка code або код пропускається. Кодування UTF-8.</span></label>
+      <p class="small muted">Коди обрізаються від пробілів, переводяться у верхній регістр і перевіряються за форматом CODE_REGEX. Ті, що вже є в списку, пропускаються як дублікати.</p>
+    </section>
+  </div>
+</form>
+{% endblock %}

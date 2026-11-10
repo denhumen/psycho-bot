@@ -1,0 +1,38 @@
+{% from "_icons.html" import icon, more_menu %}
+{% from "_card.html" import day_blocks, chat_items, composer, withdraw_item with context %}
+{% set p = card.participant %}
+<aside class="peek" aria-label="Учасник {{ p.code }}" data-peek="{{ p.code }}">
+  <div class="peek-bar">
+    <a href="{{ list_url }}" class="btn icon sm ghost" aria-label="Закрити" data-peek-close>{{ icon("close") }}</a>
+    <a href="/participants/{{ p.code }}" class="btn icon sm ghost" aria-label="Відкрити на всю сторінку">{{ icon("expand") }}</a>
+    <span class="sep"></span>
+    <button type="button" class="btn icon sm ghost" aria-label="Попередній учасник" data-peek-prev>{{ icon("up") }}</button>
+    <button type="button" class="btn icon sm ghost" aria-label="Наступний учасник" data-peek-next>{{ icon("down") }}</button>
+    <span class="grow"></span>
+    {% if card.can_withdraw %}{% call more_menu("Інші дії: позначити як вибув") %}{{ withdraw_item(card) }}{% endcall %}{% endif %}
+  </div>
+  <div class="peek-body">
+    <div class="stack" style="gap:8px">
+      <h2 class="mono" style="font-size:20px;line-height:28px">{{ p.code }}</h2>
+      <div class="row">
+        <span class="pill {{ p.status }}">{{ status_title(p.status) }}</span>
+        {% if p.bot_blocked %}<span class="pill bad">Бот заблоковано</span>{% endif %}
+        {% if card.unread %}<span class="flag">{{ card.unread }} {{ card.unread|plural("нове повідомлення", "нові повідомлення", "нових повідомлень") }}</span>{% endif %}
+      </div>
+    </div>
+
+    {% if card.days %}{{ day_blocks(card, compact=True) }}{% else %}<p class="faint">Учасник ще не стартував.</p>{% endif %}
+
+    <section class="section" aria-label="Переписка">
+      {{ chat_items(card) }}
+      {{ composer(card, list_url ~ ("&" if "?" in list_url else "?") ~ "peek=" ~ p.code, buttons=False) }}
+    </section>
+
+    <dl class="fields rows">
+      <dt>Час нагадувань</dt><dd>{{ p.reminder_time or "—" }}</dd>
+      <dt>Остання активність</dt><dd>{{ local(p.last_activity_at) }}</dd>
+      <dt>Зареєстрований</dt><dd>{{ local(p.created_at) }}</dd>
+      <dt>Перший день</dt><dd>{{ p.start_date.strftime("%d.%m.%Y") if p.start_date else "—" }}</dd>
+    </dl>
+  </div>
+</aside>

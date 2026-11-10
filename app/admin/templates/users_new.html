@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Новий користувач{% endblock %}
+{% block main_attrs %} style="max-width:720px"{% endblock %}
+{% block content %}
+<form method="post" action="/users" class="stack" style="gap:20px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="head">
+    <div class="head-title">
+      <a href="/users" class="btn icon ghost" aria-label="До користувачів">{{ icon("back") }}</a>
+      <h1>Новий користувач</h1>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Створити користувача</button></div>
+  </div>
+  <section class="panel pad stack">
+    <label class="field"><span>Логін</span><input class="inp" name="username" required autocomplete="off"></label>
+    <label class="field"><span>Тимчасовий пароль</span><input class="inp" type="password" name="password" minlength="10" required autocomplete="new-password">
+      <span class="hint">Від 10 символів. Передайте логін і пароль людині окремим захищеним каналом.</span></label>
+    <label class="field"><span>Роль</span>
+      <select class="inp" name="role">
+        {% for role in roles %}<option value="{{ role }}" {% if role == "researcher" %}selected{% endif %}>{{ ROLE_LABELS.get(role, role) }} ({{ role }})</option>{% endfor %}
+      </select>
+      <span class="hint">Дослідник не бачить груп, кодів, експорту, бекапу і користувачів.</span></label>
+  </section>
+</form>
+{% endblock %}

@@ -1,68 +1,39 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Користувачі{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Користувачі адмінки</h1>
-    <div class="sub"><strong>researcher</strong> — учасники, переписка, шаблони (без груп). <strong>owner</strong> — усе, включно з кодами, експортом, бекапом і користувачами.</div>
-  </div>
+<div class="head">
+  <div><h1>Користувачі адмінки</h1><div class="sub">Дослідник бачить учасників, переписку й шаблони без груп. Власник бачить усе, включно з кодами, експортом, бекапом і користувачами.</div></div>
+  <div class="actions"><a href="/users/new" class="btn primary">{{ icon("plus") }}Новий користувач</a></div>
 </div>
-
-<div class="grid-main">
-  <section class="card" aria-labelledby="list-u">
-    <div class="card-head"><h2 id="list-u">Усі користувачі</h2><span class="tag">{{ users|length }}</span></div>
-    <div class="table-wrap">
-    <table>
-      <thead><tr><th>Логін</th><th>Роль</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
-      <tbody>
-      {% for user in users %}
-      <tr>
-        <td class="code">{{ user.username }}{% if user.id == admin.id %} <span class="faint small">(ви)</span>{% endif %}</td>
-        <td><span class="tag">{{ user.role }}</span></td>
-        <td>{% if user.is_active %}<span class="badge s-completed">активний</span>{% else %}<span class="badge s-withdrawn">вимкнено</span>{% endif %}</td>
-        <td class="muted">{{ local(user.last_login_at) }}</td>
-        <td>
-          <details>
-            <summary class="btn ghost sm">Дії</summary>
-            <div class="stack" style="padding:10px 0;min-width:240px">
-              <form method="post" action="/users/{{ user.id }}/password" class="row">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="password" name="password" minlength="10" required autocomplete="new-password" placeholder="Новий пароль" aria-label="Новий пароль для {{ user.username }}" style="flex:1">
-                <button type="submit" class="btn secondary sm">Змінити пароль</button>
-              </form>
-              {% if user.id != admin.id %}
-              <form method="post" action="/users/{{ user.id }}/active"
-                    onsubmit="return confirm('{{ ('Вимкнути доступ для ' if user.is_active else 'Увімкнути доступ для ') ~ user.username }}?');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}">
-                <button type="submit" class="btn {{ 'danger' if user.is_active else 'secondary' }} sm">{{ "Деактивувати" if user.is_active else "Активувати" }}</button>
-              </form>
-              {% endif %}
-            </div>
-          </details>
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+<div class="ucards">
+  {% for user in users %}
+  <section class="panel pad stack">
+    <div class="row"><span class="ava">{{ user.username[:1]|upper }}</span>
+      <div class="grow"><div style="font-weight:650{{ ';color:var(--ink-2)' if not user.is_active }}">{{ user.username }}</div>
+        <div class="small muted">{{ ROLE_LABELS.get(user.role, user.role) }}{{ ", це ви" if user.id == admin.id }}</div></div>
+      {% if user.is_active %}<span class="pill active">Увімкнено</span>{% else %}<span class="pill withdrawn">Вимкнено</span>{% endif %}
+    </div>
+    <dl class="fields rows"><dt>Останній вхід</dt><dd class="{{ 'faint' if not user.last_login_at }}">{{ local(user.last_login_at) }}</dd></dl>
+    <div class="row">
+      <details class="reveal" style="flex:1 1 100%">
+        <summary class="btn sm">Змінити пароль</summary>
+        <form method="post" action="/users/{{ user.id }}/password" class="row" style="margin-top:10px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input class="inp" type="password" name="password" minlength="10" required autocomplete="new-password" placeholder="Новий пароль, від 10 символів" aria-label="Новий пароль для {{ user.username }}" style="flex:1 1 180px;width:auto">
+          <button type="submit" class="btn sm">Зберегти</button>
+        </form>
+      </details>
+      {% if user.id != admin.id %}
+      <form method="post" action="/users/{{ user.id }}/active" class="inline"
+            onsubmit="return confirm('{{ ('Вимкнути доступ для ' if user.is_active else 'Увімкнути доступ для ') ~ user.username }}?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}">
+        <button type="submit" class="btn sm{{ ' bad' if user.is_active }}">{{ "Вимкнути доступ" if user.is_active else "Увімкнути доступ" }}</button>
+      </form>
+      {% endif %}
     </div>
   </section>
-
-  <section class="card card-pad" aria-labelledby="new-u">
-    <h2 id="new-u">Новий користувач</h2>
-    <form method="post" action="/users">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label><span>Логін</span><input name="username" required autocomplete="off"></label>
-      <label><span>Тимчасовий пароль <span class="faint small">(від 10 символів)</span></span>
-        <input type="password" name="password" minlength="10" required autocomplete="new-password"></label>
-      <label><span>Роль</span>
-        <select name="role">
-          {% for role in roles %}<option value="{{ role }}" {% if role == "researcher" %}selected{% endif %}>{{ role }}</option>{% endfor %}
-        </select>
-      </label>
-      <button type="submit" class="btn">Створити користувача</button>
-      <p class="faint small" style="margin-top:10px">Передайте логін і пароль людині окремим захищеним каналом.</p>
-    </form>
-  </section>
+  {% endfor %}
 </div>
 {% endblock %}

@@ -1,45 +1,57 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Коди{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Коди учасників</h1>
-    <div class="sub">Бот приймає лише коди з цього списку (CODE_VALIDATION=whitelist).</div>
-  </div>
+<div class="head">
+  <h1>Коди учасників</h1>
+  <div class="actions"><a href="/codes/new" class="btn primary">{{ icon("plus") }}Додати коди</a></div>
 </div>
 
 {% if validation != "whitelist" %}
-<div class="note warn" style="margin-bottom:16px">Зараз <code>CODE_VALIDATION={{ validation }}</code>: бот приймає будь-який код правильного формату, і список нижче не використовується.</div>
+<div class="note att">{{ icon("warn") }}<div>Зараз <span class="mono">CODE_VALIDATION={{ validation }}</span>: бот приймає будь-який код правильного формату, список нижче не використовується.</div></div>
 {% endif %}
-
-<div class="kpis" style="margin-bottom:16px">
-  <div class="card kpi"><div class="value">{{ total }}</div><div class="label">усього кодів</div></div>
-  <div class="card kpi"><div class="value">{{ used }}</div><div class="label">використано</div></div>
-  <div class="card kpi"><div class="value">{{ free }}</div><div class="label">вільних</div></div>
-</div>
 
 {% if report %}
-<div class="flash flash-ok" role="status">
-  Результат завантаження: додано {{ report.added }}, дублікатів {{ report.duplicates }}, невалідних {{ report.invalid }}.
-  {% if report.invalid_examples %}<div class="small" style="margin-top:4px">Невалідні: {{ report.invalid_examples | join(", ") }}</div>{% endif %}
-</div>
+<div class="note ok" role="status"><div>Результат завантаження: додано {{ report.added }}, дублікатів {{ report.duplicates }}, невалідних {{ report.invalid }}.
+  {% if report.invalid_examples %}<div class="small" style="margin-top:4px">Невалідні: {{ report.invalid_examples | join(", ") }}</div>{% endif %}</div></div>
 {% endif %}
 
-<section class="card card-pad" aria-labelledby="up">
-  <h2 id="up">Додати коди</h2>
-  <form method="post" action="/codes" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="grid-2">
-      <label><span>Вставте коди, по одному в рядку</span>
-        <textarea name="codes" rows="8" placeholder="ABC123&#10;XYZ789"></textarea>
-      </label>
-      <div>
-        <label><span>або завантажте CSV</span><input type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></label>
-        <p class="faint small">Береться перша колонка; рядок заголовка <code>code</code>/<code>код</code> пропускається. Кодування UTF-8.</p>
-        <p class="faint small">Коди обрізаються від пробілів, переводяться у верхній регістр і перевіряються за CODE_REGEX. Дублікати пропускаються.</p>
-      </div>
-    </div>
-    <button type="submit" class="btn">Завантажити коди</button>
+<section class="panel">
+  <div class="pad stack" style="border-bottom:1px solid var(--line)">
+    {% set base = [total, 1]|max %}
+    <div class="bar thin" role="img" aria-label="Використано {{ used }} з {{ total }}"><span class="b-ok" style="width:{{ (used / base * 100)|round(1) }}%"></span></div>
+    <div class="legend"><span><i class="sw b-ok"></i>Використано {{ used }}</span><span><i class="sw b-faint"></i>Вільних {{ free }}</span><span>Усього {{ total }}</span></div>
+  </div>
+  <form method="get" action="/codes" class="toolbar" role="search">
+    <input type="hidden" name="state" value="{{ state }}">
+    <label class="searchbox">{{ icon("search") }}<input class="inp mono" type="search" name="q" value="{{ q }}" placeholder="Код" aria-label="Пошук коду"></label>
+    <div class="seg-wrap"><div class="seg">{% for value, label in states.items() %}<a href="/codes{{ query(state=value) }}" class="{{ 'on' if value == state }}">{{ label }}</a>{% endfor %}</div></div>
   </form>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Код</th><th>Стан</th><th>Додано</th><th class="col-opt">Ким</th><th>Зареєстровано</th></tr></thead>
+    <tbody>
+    {% for code, registered_at in rows %}
+      <tr>
+        {% if registered_at %}
+        <td><a href="/participants/{{ code.code }}" class="code">{{ code.code }}</a></td><td><span class="pill ok">Використаний</span></td>
+        {% else %}
+        <td><span class="mono" style="font-weight:600">{{ code.code }}</span></td><td><span class="pill plain">Вільний</span></td>
+        {% endif %}
+        <td class="muted">{{ local(code.uploaded_at, "%d.%m.%Y") }}</td>
+        <td class="muted col-opt">{{ code.uploaded_by or "—" }}</td>
+        <td class="{{ '' if registered_at else 'faint' }}">{{ local(registered_at) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5"><div class="empty">{% if q or state %}Нічого не знайдено. <a href="/codes">Скинути фільтри</a>{% else %}Кодів ще немає. <a href="/codes/new">Додати коди</a>{% endif %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="row between" style="padding:10px 20px;border-top:1px solid var(--line)">
+    <span class="small muted">{{ first }}–{{ last }} з {{ found }}</span>
+    <div class="row">
+      {% if page > 1 %}<a class="btn sm" href="/codes{{ query(page=page - 1) }}">Назад</a>{% else %}<button type="button" class="btn sm" disabled>Назад</button>{% endif %}
+      {% if page < pages %}<a class="btn sm" href="/codes{{ query(page=page + 1) }}">Далі</a>{% else %}<button type="button" class="btn sm" disabled>Далі</button>{% endif %}
+    </div>
+  </div>
 </section>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""Шаблони ручних нагадувань (CRUD). Без прив'язки до групи (інваріант 6)."""
+"""Шаблони ручних повідомлень (CRUD). Без прив'язки до групи (інваріант 6)."""
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import Response
@@ -18,6 +18,20 @@ async def list_templates(request: Request, admin: AdminUser = Depends(current_ad
     return await render(request, "templates.html", admin, items=items)
 
 
+@router.get("/templates/new")
+async def new_template(request: Request, admin: AdminUser = Depends(current_admin)) -> Response:
+    return await render(request, "template_edit.html", admin, item=None)
+
+
+@router.get("/templates/{template_id}")
+async def edit_template(request: Request, template_id: int, admin: AdminUser = Depends(current_admin)) -> Response:
+    async with get_ctx(request).read() as session:
+        item = await session.get(ReminderTemplate, template_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Шаблон не знайдено")
+    return await render(request, "template_edit.html", admin, item=item)
+
+
 @router.post("/templates")
 async def create_template(
     request: Request,
@@ -28,7 +42,7 @@ async def create_template(
 ) -> Response:
     if not title.strip() or not text.strip():
         flash(request, "Назва і текст обов'язкові.", "error")
-        return redirect("/templates")
+        return redirect("/templates/new")
     async with get_ctx(request).db() as session, session.begin():
         session.add(ReminderTemplate(title=title.strip(), text=text.strip(), is_active=is_active is not None))
     flash(request, "Шаблон створено.")
@@ -46,7 +60,7 @@ async def update_template(
 ) -> Response:
     if not title.strip() or not text.strip():
         flash(request, "Назва і текст обов'язкові.", "error")
-        return redirect("/templates")
+        return redirect(f"/templates/{template_id}")
     async with get_ctx(request).db() as session, session.begin():
         item = await session.get(ReminderTemplate, template_id)
         if item is None:

@@ -52,6 +52,8 @@ class ChoiceQuestion(BaseModel):
     id: Ident
     type: Literal["choice"]
     text: NonEmpty
+    # Коротка назва для адмінки й експорту («Завдання»); учасники її не бачать.
+    label: NonEmpty | None = None
     options: list[Option] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -70,6 +72,7 @@ class ScaleQuestion(BaseModel):
     id: Ident
     type: Literal["scale"]
     text: NonEmpty
+    label: NonEmpty | None = None
     min: int
     max: int
 

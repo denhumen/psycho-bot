@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import Response
@@ -6,9 +9,10 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.auth import current_admin, get_ctx, require_owner
-from app.admin.overview import CELL_TITLES, apply_filters, cell, load_rows
-from app.admin.web import STATUS_LABELS, flash, redirect, render
+from app.admin.overview import NOT_SENT, WAITING, apply_filters, cell, load_rows
+from app.admin.web import STATUS_LABELS, flash, redirect, render, safe_next
 from app.clock import clock
+from app.context import AppContext
 from app.db.models import (
     AdminUser,
     CheckinAnswer,
@@ -26,16 +30,22 @@ from app.domain.sessions import DAYS
 
 router = APIRouter()
 
+PAGE_SIZE = 50
 NO_MESSAGES = (Status.WITHDRAWN, Status.DECLINED)
 WITHDRAWABLE = (Status.REGISTERED, Status.CONSENTED, Status.ACTIVE)
 FILTERS = {
-    "": "усі",
-    "not_done_today": "не пройшли сьогодні",
-    "missed_streak": "пропустили 2+ дні поспіль",
-    "unread": "є непрочитані",
-    "not_started": "зареєструвались, але не стартували",
-    "blocked": "заблокували бота",
+    "": "Усі",
+    "unread": "Чекають на відповідь",
+    "not_done_today": "Не пройшли сьогодні",
+    "missed_streak": "Пропуски 2+ дні",
+    "not_started": "Не стартували",
+    "blocked": "Заблокували бота",
 }
+
+
+def list_query(status: str, flag: str, q: str, **extra: Any) -> str:
+    params = {k: v for k, v in {"status": status, "flag": flag, "q": q, **extra}.items() if v not in ("", None, 1)}
+    return "?" + urlencode(params) if params else ""
 
 
 @router.get("/participants")
@@ -44,44 +54,104 @@ async def participants_list(
     status: str = "",
     flag: str = "",
     q: str = "",
+    page: int = 1,
+    peek: str = "",
     admin: AdminUser = Depends(current_admin),
 ) -> Response:
     ctx = get_ctx(request)
     async with ctx.read() as session:
         all_rows = await load_rows(session, clock.now())
     rows = apply_filters(all_rows, status=status, flag=flag, q=q)
-    # Лічильники для швидких фільтрів (з урахуванням вибраного статусу і пошуку).
-    flag_counts = {key: len(apply_filters(all_rows, status=status, flag=key, q=q)) for key in FILTERS}
+    pages = max(1, -(-len(rows) // PAGE_SIZE))
+    page = min(max(page, 1), pages)
+    start = (page - 1) * PAGE_SIZE
+    # Відкритий peek після надсилання повідомлення з нього (працює і без JS).
+    peek_card = await load_card(ctx, peek, admin) if peek else None
     return await render(
         request,
         "participants.html",
         admin,
-        rows=rows,
-        total=len(all_rows),
-        flag_counts=flag_counts,
+        rows=rows[start : start + PAGE_SIZE],
+        found=len(rows),
+        first=start + 1 if rows else 0,
+        last=min(start + PAGE_SIZE, len(rows)),
+        page=page,
+        pages=pages,
         statuses=STATUS_LABELS,
         filters=FILTERS,
         status=status,
         flag=flag,
         q=q,
-        cell_titles=CELL_TITLES,
-        days=DAYS,
+        query=lambda **extra: list_query(**{"status": status, "flag": flag, "q": q, **extra}),
+        card=peek_card,
+        list_url="/participants" + list_query(status, flag, q, page=page),
     )
 
 
+# --- картка і peek ------------------------------------------------------------
+
+
 @dataclass
-class ChatLine:
-    message: Message
+class DayBlock:
+    session: StudySession
+    state: str
+    answers: list[tuple[str, str]]
+
+    @property
+    def css(self) -> str:
+        return {WAITING: "today", NOT_SENT: "future"}.get(self.state, "")
+
+
+@dataclass
+class ChatItem:
+    at: datetime
+    kind: str  # "msg" | "sys"
     text: str
-    author: str | None
-    unread: bool
+    direction: str = ""
+    author: str = ""
+    unread: bool = False
+    icon: str = ""
 
 
-def chat_text(message: Message) -> str:
-    # Інваріант 8: текст інструкції в адмінці не показується.
-    if message.kind == Kind.INSTRUCTION:
-        return f"📄 Інструкція — день {message.session_day}"
-    return message.text
+@dataclass
+class Card:
+    participant: Participant
+    days: list[DayBlock]
+    current_day: int
+    chat: list[ChatItem]
+    unread: int
+    events: list[Event]
+    templates: list[ReminderTemplate]
+    can_message: bool
+    can_withdraw: bool
+
+
+def build_chat(
+    ctx: AppContext, messages: list[Message], sessions: list[StudySession], authors: dict[int, str]
+) -> list[ChatItem]:
+    tz = ctx.settings.tz
+    items: list[ChatItem] = []
+    for m in messages:
+        hhmm = m.created_at.astimezone(tz).strftime("%H:%M")
+        if m.kind == Kind.INSTRUCTION:
+            # Інваріант 8: текст інструкції в адмінці не показується.
+            items.append(ChatItem(m.created_at, "sys", f"Інструкція, день {m.session_day}, {hhmm}", icon="doc"))
+        elif m.kind == Kind.AUTO_REMINDER:
+            items.append(ChatItem(m.created_at, "sys", f"Авто-нагадування, {hhmm}"))
+        elif m.kind == Kind.CHECKIN or m.text_key == "checkin_thanks":
+            continue  # питання опитування показуються одним рядком «Опитування пройдено»
+        elif m.direction == "in":
+            unread = m.read_by_admin_at is None
+            items.append(ChatItem(m.created_at, "msg", m.text, direction="in", author="Учасник", unread=unread))
+        else:
+            author = authors.get(m.sender_admin_id or 0, "") if m.kind == Kind.MANUAL else "Бот"
+            items.append(ChatItem(m.created_at, "msg", m.text, direction="out", author=author))
+    for s in sessions:
+        if s.completed_at is not None:
+            hhmm = s.completed_at.astimezone(tz).strftime("%H:%M")
+            items.append(ChatItem(s.completed_at, "sys", f"Опитування дня {s.day} пройдено, {hhmm}"))
+    items.sort(key=lambda item: item.at)
+    return items
 
 
 async def _participant_or_404(session: AsyncSession, code: str) -> Participant:
@@ -93,58 +163,64 @@ async def _participant_or_404(session: AsyncSession, code: str) -> Participant:
     return participant
 
 
-@router.get("/participants/{code}")
-async def participant_card(request: Request, code: str, admin: AdminUser = Depends(current_admin)) -> Response:
-    ctx = get_ctx(request)
+async def load_card(ctx: AppContext, code: str, admin: AdminUser) -> Card:
+    """Дані картки і peek. Відкриття позначає вхідні прочитаними. Групу не завантажуємо."""
     content = ctx.content
+    now = clock.now()
     async with ctx.read() as session:
         participant = await _participant_or_404(session, code)
-        sessions = (
-            await session.execute(
-                select(StudySession).where(StudySession.participant_id == participant.id).order_by(StudySession.day)
-            )
-        ).scalars().all()
+        sessions = list(
+            (
+                await session.execute(
+                    select(StudySession)
+                    .where(StudySession.participant_id == participant.id)
+                    .order_by(StudySession.day)
+                )
+            ).scalars()
+        )
         answers = (
-            await session.execute(
-                select(CheckinAnswer).where(CheckinAnswer.session_id.in_([s.id for s in sessions]))
-            )
+            await session.execute(select(CheckinAnswer).where(CheckinAnswer.session_id.in_([s.id for s in sessions])))
         ).scalars().all()
-        messages = (
-            await session.execute(
-                select(Message).where(Message.participant_id == participant.id).order_by(Message.created_at, Message.id)
-            )
-        ).scalars().all()
-        authors = dict(
-            (await session.execute(select(AdminUser.id, AdminUser.username))).tuples().all()
+        messages = list(
+            (
+                await session.execute(
+                    select(Message)
+                    .where(Message.participant_id == participant.id)
+                    .order_by(Message.created_at, Message.id)
+                )
+            ).scalars()
         )
-        events = (
-            await session.execute(
-                select(Event).where(Event.participant_id == participant.id).order_by(Event.at.desc()).limit(30)
-            )
-        ).scalars().all()
-        reminder_templates = (
-            await session.execute(
-                select(ReminderTemplate).where(ReminderTemplate.is_active.is_(True)).order_by(ReminderTemplate.title)
-            )
-        ).scalars().all()
+        authors = dict((await session.execute(select(AdminUser.id, AdminUser.username))).tuples().all())
+        events = list(
+            (
+                await session.execute(
+                    select(Event).where(Event.participant_id == participant.id).order_by(Event.at.desc()).limit(30)
+                )
+            ).scalars()
+        )
+        templates = list(
+            (
+                await session.execute(
+                    select(ReminderTemplate)
+                    .where(ReminderTemplate.is_active.is_(True))
+                    .order_by(ReminderTemplate.title)
+                )
+            ).scalars()
+        )
 
-    answers_by_session: dict[int, list[tuple[str, str]]] = {}
-    for item in answers:
+    by_session: dict[int, list[tuple[str, str]]] = {}
+    order = {q.id: i for i, q in enumerate(content.checkin.questions)}
+    for item in sorted(answers, key=lambda a: order.get(a.question_id, 99)):
         question = content.checkin.by_id(item.question_id)
-        label = dict(question.choices()).get(item.value, item.value) if question else item.value
-        answers_by_session.setdefault(item.session_id, []).append((item.question_id, label))
-    chat = [
-        ChatLine(
-            message=m,
-            text=chat_text(m),
-            author=authors.get(m.sender_admin_id) if m.sender_admin_id else None,
-            unread=m.direction == "in" and m.read_by_admin_at is None,
-        )
-        for m in messages
-    ]
+        label = (question.label or question.id) if question else item.question_id
+        value = dict(question.choices()).get(item.value, item.value) if question else item.value
+        by_session.setdefault(item.session_id, []).append((label, value))
+    days = [DayBlock(s, cell(s, now), by_session.get(s.id, [])) for s in sessions]
+    sent_days = [s.day for s in sessions if s.sent_at is not None]
+    chat = build_chat(ctx, messages, sessions, authors)
+    unread = sum(1 for item in chat if item.unread)
 
-    # Відкриття картки позначає вхідні прочитаними (підсвічені — ті, що були непрочитані до цього).
-    if any(line.unread for line in chat):
+    if unread:
         async with ctx.db() as session, session.begin():
             await session.execute(
                 update(Message)
@@ -153,45 +229,60 @@ async def participant_card(request: Request, code: str, admin: AdminUser = Depen
                     Message.direction == "in",
                     Message.read_by_admin_at.is_(None),
                 )
-                .values(read_by_admin_at=clock.now())
+                .values(read_by_admin_at=now)
             )
 
-    return await render(
-        request,
-        "participant.html",
-        admin,
+    return Card(
         participant=participant,
-        sessions=sessions,
-        cells=[cell(s, clock.now()) for s in sessions],
-        cell_titles=CELL_TITLES,
-        answers=answers_by_session,
+        days=days,
+        current_day=max(sent_days, default=0),
         chat=chat,
+        unread=unread,
         events=events,
-        reminder_templates=reminder_templates,
+        templates=templates,
         can_message=participant.status not in NO_MESSAGES,
         can_withdraw=admin.role == "owner" and participant.status in WITHDRAWABLE,
-        now=clock.now(),
     )
+
+
+@router.get("/participants/{code}")
+async def participant_card(request: Request, code: str, admin: AdminUser = Depends(current_admin)) -> Response:
+    card = await load_card(get_ctx(request), code, admin)
+    return await render(request, "participant.html", admin, card=card, now=clock.now(), days_total=DAYS)
+
+
+@router.get("/participants/{code}/peek")
+async def participant_peek(
+    request: Request, code: str, back: str = "", admin: AdminUser = Depends(current_admin)
+) -> Response:
+    """HTML-фрагмент бічної панелі для списку учасників."""
+    card = await load_card(get_ctx(request), code, admin)
+    list_url = safe_next(back, "/participants")
+    return await render(request, "_peek.html", admin, card=card, list_url=list_url, now=clock.now())
 
 
 @router.post("/participants/{code}/message")
 async def send_manual_message(
-    request: Request, code: str, text: str = Form(""), admin: AdminUser = Depends(current_admin)
+    request: Request,
+    code: str,
+    text: str = Form(""),
+    next: str = Form(""),
+    admin: AdminUser = Depends(current_admin),
 ) -> Response:
     ctx = get_ctx(request)
     text = text.strip()
     async with ctx.read() as session:
         participant = await _participant_or_404(session, code)
         chat_id = await chat_of(session, participant.id)
-    url = f"/participants/{participant.code}"
+    url = safe_next(next, f"/participants/{participant.code}")
     if not text:
         flash(request, "Повідомлення порожнє.", "error")
         return redirect(url)
     if participant.status in NO_MESSAGES:
-        flash(request, "Учасник вибув або не погодився — писати йому не можна.", "error")
+        flash(request, "Учасник вибув або не погодився, писати йому не можна.", "error")
         return redirect(url)
     if chat_id is None:
-        flash(request, "Контакт учасника видалено — надіслати неможливо.", "error")
+        flash(request, "Контакт учасника видалено, надіслати неможливо.", "error")
         return redirect(url)
 
     async def audit(session: AsyncSession) -> None:
@@ -203,7 +294,7 @@ async def send_manual_message(
     if result.ok:
         flash(request, "Повідомлення надіслано.")
     elif result.blocked:
-        flash(request, "Учасник заблокував бота — повідомлення не доставлено.", "error")
+        flash(request, "Учасник заблокував бота, повідомлення не доставлено.", "error")
     else:
         flash(request, "Не вдалося надіслати повідомлення. Спробуйте пізніше.", "error")
     return redirect(url)
@@ -218,4 +309,3 @@ async def mark_withdrawn(request: Request, code: str, admin: AdminUser = Depends
             set_status(session, participant, Status.WITHDRAWN, actor=admin_actor(admin.id))
             flash(request, "Учасника позначено як вибулого.")
     return redirect(f"/participants/{participant.code}")
-

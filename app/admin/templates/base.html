@@ -1,45 +1,48 @@
 <!doctype html>
+{% from "_icons.html" import icon %}
 <html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{% block title %}Адмінка{% endblock %} · Дослідження</title>
+  <title>{% block title %}Адмінка{% endblock %}: дослідження</title>
   <style>{% include "_styles.css" %}</style>
 </head>
 <body>
 {% if admin %}
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">✎</span><span>Дослідження<small>експресивне письмо</small></span></div>
+<div class="shell{% block shell_class %}{% endblock %}">
+  <aside class="side">
+    <div class="brand"><span class="brand-mark">{{ icon("pen") }}</span><div><b>Дослідження</b><span>експресивне письмо</span></div></div>
     <nav class="nav" aria-label="Основна навігація">
-      <a href="/" class="{{ 'active' if path == '/' }}">Огляд</a>
-      <a href="/participants" class="{{ 'active' if path.startswith('/participants') }}">Учасники
-        {% if nav_unread %}<span class="count" title="Непрочитаних повідомлень">{{ nav_unread }}</span>{% endif %}</a>
-      <a href="/templates" class="{{ 'active' if path.startswith('/templates') }}">Шаблони</a>
+      <a href="/" class="{{ 'on' if path == '/' }}">Огляд</a>
+      <a href="/participants" class="{{ 'on' if path.startswith('/participants') }}">Учасники
+        {%- if nav_unread %}<span class="dot" title="Є непрочитані повідомлення"></span>{% endif %}</a>
+      <a href="/templates" class="{{ 'on' if path.startswith('/templates') }}">Шаблони</a>
       {% if admin.role == "owner" %}
       <div class="nav-label">Керування</div>
-      <a href="/codes" class="{{ 'active' if path.startswith('/codes') }}">Коди</a>
-      <a href="/export" class="{{ 'active' if path.startswith('/export') }}">Експорт</a>
-      <a href="/backup" class="{{ 'active' if path.startswith('/backup') }}">Бекап</a>
-      <a href="/users" class="{{ 'active' if path.startswith('/users') }}">Користувачі</a>
+      <a href="/codes" class="{{ 'on' if path.startswith('/codes') }}">Коди</a>
+      <a href="/export" class="{{ 'on' if path.startswith('/export') }}">Експорт</a>
+      <a href="/backup" class="{{ 'on' if path.startswith('/backup') }}">Бекап</a>
+      <a href="/users" class="{{ 'on' if path.startswith('/users') }}">Користувачі</a>
       {% endif %}
     </nav>
-    <div class="sidebar-foot">
-      <div class="who-block"><div class="who">{{ admin.username }}</div><div class="faint small">{{ admin.role }}</div></div>
-      <form method="post" action="/logout" class="inline-form">
+    <div class="side-foot">
+      <div class="who"><b>{{ admin.username }}</b><div class="faint small">{{ admin.role }}</div></div>
+      <form method="post" action="/logout" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn ghost sm">Вийти</button>
       </form>
     </div>
   </aside>
-  <main class="main">
-    {% for kind, text in flashes %}<div class="flash flash-{{ kind }}" role="status">{{ text }}</div>{% endfor %}
+  <main class="main"{% block main_attrs %}{% endblock %}>
+    {% for kind, text in flashes %}<div class="flash {{ kind }}" role="status">{{ text }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>
+  {% block after_main %}{% endblock %}
 </div>
 {% else %}
 {% block anonymous %}{% endblock %}
 {% endif %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

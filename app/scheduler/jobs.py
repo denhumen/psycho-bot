@@ -39,6 +39,17 @@ def last_due_moment(ctx: AppContext, hhmm: str) -> datetime:
     return due.astimezone(UTC)
 
 
+def next_moment(ctx: AppContext, hhmm: str) -> datetime:
+    """Найближчий майбутній момент HH:MM за Києвом, в UTC (для «наступного бекапу»)."""
+    tz = ctx.settings.tz
+    now_local = clock.now().astimezone(tz)
+    at = parse_hhmm(hhmm)
+    due = datetime.combine(now_local.date(), at, tzinfo=tz)
+    if due <= now_local:
+        due = datetime.combine(now_local.date() + timedelta(days=1), at, tzinfo=tz)
+    return due.astimezone(UTC)
+
+
 def _stamp_session(column: Any, session_id: int) -> AfterSent:
     async def after(session: AsyncSession) -> None:
         await session.execute(

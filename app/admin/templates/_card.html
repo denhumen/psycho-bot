@@ -1,0 +1,101 @@
+{# Спільні блоки картки учасника і peek. Імпортувати `with context`. #}
+{% from "_icons.html" import icon %}
+
+{% macro day_blocks(card, compact=False) -%}
+<div class="days7" aria-label="Тиждень, день {{ card.current_day }} з 7">
+  {% for d in card.days %}{% set s = d.session %}
+  {% if compact %}
+  <div class="d7 {{ d.css }}" title="День {{ s.day }}: {{ CELL_TITLES[d.state] }}"><span class="week"><i class="{{ WEEK_CLASS[d.state] }}">{{ WEEK_GLYPH[d.state] }}</i></span><b>{{ s.day }}</b><span class="d7-date">{{ local(s.scheduled_for, "%d.%m") }}</span></div>
+  {% else %}
+  <div class="d7 {{ d.css }}">
+    <div class="d7-h"><b>День {{ s.day }}</b><span class="week" title="{{ CELL_TITLES[d.state] }}"><i class="{{ WEEK_CLASS[d.state] }}">{{ WEEK_GLYPH[d.state] }}</i></span></div>
+    <span class="d7-date">{{ short_day(s.scheduled_for) }}</span>
+    <div class="d7-res">
+      {% for label, value in d.answers %}<span>{{ label }} <b>{{ value }}</b></span>{% endfor %}
+      {% if s.completed_at %}<span>Пройдено {{ local(s.completed_at, "%H:%M") }}</span>
+      {% elif d.state == "✕" %}<span>Пропущено</span>
+      {% elif d.state == "○" %}<span>Відкрито до {{ local(s.deadline, "%d.%m, %H:%M") }}</span>
+        {% if s.reminder_sent_at %}<span>Нагадування {{ local(s.reminder_sent_at, "%H:%M") }}</span>{% endif %}
+      {% else %}<span>о {{ local(s.scheduled_for, "%H:%M") }}</span>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro chat_items(card, cls="") -%}
+<div class="chat {{ cls }}" data-chat>
+  {% set ns = namespace(day=None) %}
+  {% for item in card.chat %}
+    {% set day = local(item.at, "%Y-%m-%d") %}
+    {% if day != ns.day %}<span class="daysep">{{ long_day(item.at) }}</span>{% set ns.day = day %}{% endif %}
+    {% if item.kind == "sys" %}
+    <span class="sysline">{% if item.icon %}{{ icon(item.icon) }}{% endif %}{{ item.text }}</span>
+    {% else %}
+    <div class="msg {{ item.direction }}{{ ' unread' if item.unread }}"><div class="meta"><span>{{ item.author }}</span><span>{{ local(item.at, "%H:%M") }}</span>{% if item.unread %}<b>нове</b>{% endif %}</div>{{ item.text }}</div>
+    {% endif %}
+  {% else %}
+  <p class="faint" style="text-align:center;margin:24px 0">Повідомлень ще немає.</p>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro composer(card, next_url, buttons=True) -%}
+{% if card.can_message %}
+<form method="post" action="/participants/{{ card.participant.code }}/message" class="composer" style="{{ '' if buttons else 'padding:0;border:0' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  {% if card.templates and buttons %}
+  <div class="row">
+    <span class="small muted">Шаблон</span>
+    {% for t in card.templates %}<button type="button" class="btn sm" data-template data-text="{{ t.text }}">{{ t.title }}</button>{% endfor %}
+  </div>
+  {% endif %}
+  <label class="field"><span class="small muted">Повідомлення від імені бота</span>
+    <textarea class="inp" name="text" rows="3" required data-composer></textarea></label>
+  <div class="row between">
+    {% if card.templates and not buttons %}
+    <select class="inp" style="width:auto" aria-label="Шаблон" data-template-select>
+      <option value="">Шаблон</option>
+      {% for t in card.templates %}<option value="{{ t.id }}" data-text="{{ t.text }}">{{ t.title }}</option>{% endfor %}
+    </select>
+    {% else %}<span></span>{% endif %}
+    <button type="submit" class="btn primary">Надіслати</button>
+  </div>
+</form>
+{% else %}
+<div class="composer"><div class="note">Учасник {{ status_label(card.participant.status) }}, надсилати повідомлення не можна.</div></div>
+{% endif %}
+{%- endmacro %}
+
+{% macro withdraw_item(card) -%}
+<form method="post" action="/participants/{{ card.participant.code }}/withdraw"
+      onsubmit="return confirm('Позначити учасника {{ card.participant.code }} як вибулого? Автоматичні повідомлення йому припиняться, дані залишаться.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="bad">Позначити як вибув</button>
+</form>
+{%- endmacro %}
+
+{# Скрипт: шаблони підставляють текст, чат прокручується до найновішого. #}
+{% macro card_script() -%}
+<script>
+(function () {
+  function wire(root) {
+    root.querySelectorAll("[data-chat]").forEach(function (c) { c.scrollTop = c.scrollHeight; });
+    var box = root.querySelector("[data-composer]");
+    root.querySelectorAll("[data-template]").forEach(function (b) {
+      b.addEventListener("click", function () { if (box) { box.value = b.dataset.text; box.focus(); } });
+    });
+    root.querySelectorAll("[data-template-select]").forEach(function (s) {
+      s.addEventListener("change", function () {
+        var o = s.options[s.selectedIndex];
+        if (box && o.dataset.text) { box.value = o.dataset.text; box.focus(); }
+      });
+    });
+  }
+  window.wireCard = wire;
+  wire(document);
+})();
+</script>
+{%- endmacro %}

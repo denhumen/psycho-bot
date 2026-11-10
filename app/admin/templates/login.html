@@ -1,17 +1,26 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Вхід{% endblock %}
 {% block anonymous %}
-<div class="auth">
-  <div class="card">
-    <div class="brand"><span class="brand-mark">✎</span><span>Дослідження<small>адмін-панель</small></span></div>
-    <h1 style="margin-bottom:4px">Вхід</h1>
-    <p class="muted" style="margin-bottom:18px">Лише для команди дослідження.</p>
-    {% if error %}<div class="flash flash-error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" action="/login">
+<div class="auth-split">
+  <div class="auth-aside">
+    <div class="row" style="gap:10px"><span class="brand-mark">{{ icon("pen") }}</span><b>Дослідження</b></div>
+    <div class="stack" style="gap:12px">
+      <p class="lead">Експресивне письмо, стрес і благополуччя молодих дорослих</p>
+      <p class="sub">Сім днів письма і коротке опитування щодня.</p>
+    </div>
+    <p class="small sub">Доступ лише для команди дослідження</p>
+  </div>
+  <div class="auth-main">
+    <form class="auth-form" method="post" action="/login" aria-labelledby="l-h">
+      <h1 id="l-h">Вхід</h1>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label><span>Логін</span><input name="username" autocomplete="username" required autofocus></label>
-      <label><span>Пароль</span><input type="password" name="password" autocomplete="current-password" required></label>
-      <button type="submit" class="btn" style="width:100%;margin-top:4px">Увійти</button>
+      <label class="field{{ ' err' if error }}"><span>Логін</span>
+        <input class="inp" name="username" autocomplete="username" required autofocus></label>
+      <label class="field{{ ' err' if error }}"><span>Пароль</span>
+        <input class="inp" name="password" type="password" autocomplete="current-password" required>
+        {% if error %}<span class="err-text" role="alert">{{ error }}</span>{% endif %}</label>
+      <button type="submit" class="btn primary">Увійти</button>
     </form>
   </div>
 </div>

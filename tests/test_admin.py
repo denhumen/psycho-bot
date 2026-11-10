@@ -103,11 +103,11 @@ async def test_dashboard_group_split_only_for_owner(settings: Settings, ctx: App
     with admin_client(settings) as (client, _):
         login(client, *RESEARCHER)
         page = client.get("/").text
-        assert "рандомізовано" in page and "A / B" not in page
+        assert "Рандомізовано" in page and "A 2" not in page and "бачить лише owner" not in page
         post(client, "/logout")
         login(client, *OWNER)
         page = client.get("/").text
-        assert "рандомізовано A / B" in page and "2 / 2" in page
+        assert "A 2, B 2 (бачить лише owner)" in page
 
 
 async def test_card_chat_manual_message_and_reply(settings: Settings, ctx: AppContext) -> None:
@@ -123,12 +123,12 @@ async def test_card_chat_manual_message_and_reply(settings: Settings, ctx: AppCo
     with admin_client(settings) as (client, tg):
         login(client, *RESEARCHER)
         page = client.get("/participants/chat01").text
-        assert "📄 Інструкція — день 1" in page
+        assert "Інструкція, день 1," in page
         for group in ("A", "B"):
             assert ctx.content.instructions.text(group, 1) not in page  # інваріант 8
-        assert "Маю питання щодо завдання" in page and "bubble in unread" in page
+        assert "Маю питання щодо завдання" in page and "msg in unread" in page
         assert 'data-text="Як ви? Нагадуємо про опитування."' in page
-        assert "bubble in unread" not in client.get("/participants/CHAT01").text  # позначено прочитаним
+        assert "msg in unread" not in client.get("/participants/CHAT01").text  # позначено прочитаним
 
         response = post(client, "/participants/CHAT01/message", {"text": "Дякуємо, відповімо найближчим часом"})
         assert response.status_code == 303
@@ -194,8 +194,8 @@ async def test_participant_filters(settings: Settings, ctx: AppContext) -> None:
         assert codes("status=registered") == {"WAIT03"}
         assert codes("q=miss") == {"MISS02"}
         page = client.get("/participants?q=PEND").text
-        cells = re.findall(r'<span title="День \d: [^"]+"[^>]*>(.)</span>', page)
-        assert "3/7" in page and "".join(cells) == "✕●○····"
+        cells = re.findall(r'<i class="(w-\w+)" title="День \d: ', page)
+        assert cells == ["w-miss", "w-done", "w-wait"] + ["w-none"] * 4
 
 
 async def test_group_never_rendered(settings: Settings, ctx: AppContext) -> None:

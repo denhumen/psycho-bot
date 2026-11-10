@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon, more_menu %}
+{% block title %}{{ item.title if item else "Новий шаблон" }}{% endblock %}
+{% block content %}
+<form method="post" action="{{ '/templates/' ~ item.id if item else '/templates' }}" class="stack" style="gap:20px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="head">
+    <div class="head-title">
+      <a href="/templates" class="btn icon ghost" aria-label="До шаблонів">{{ icon("back") }}</a>
+      <h1>{{ item.title if item else "Новий шаблон" }}</h1>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn primary">{{ "Зберегти" if item else "Створити шаблон" }}</button>
+      {% if item %}
+      {% call more_menu("Інші дії: видалити шаблон") %}
+        <button type="submit" form="delete-tpl" class="bad">Видалити шаблон</button>
+      {% endcall %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="split">
+    <section class="panel pad stack">
+      <label class="field"><span>Назва</span><input class="inp" name="title" value="{{ item.title if item else '' }}" required></label>
+      <label class="field"><span>Текст</span>
+        <textarea class="inp" name="text" rows="8" required data-tpl-text>{{ item.text if item else '' }}</textarea>
+        <span class="hint"><span data-tpl-count>{{ (item.text|length) if item else 0 }}</span> символів. Надсилається звичайним текстом, без форматування.</span></label>
+      <label class="check"><input type="checkbox" name="is_active" {% if not item or item.is_active %}checked{% endif %}> Показувати в переписці з учасником</label>
+    </section>
+    <section class="tg-col" aria-label="Попередній перегляд">
+      <span class="small muted">Так побачить учасник</span>
+      <div class="tg" style="min-height:240px"><div class="bubble" data-tpl-preview>{{ item.text if item else '' }}</div></div>
+    </section>
+  </div>
+</form>
+{% if item %}
+<form id="delete-tpl" method="post" action="/templates/{{ item.id }}/delete" class="inline"
+      onsubmit="return confirm('Видалити шаблон «{{ item.title }}»? Уже надіслані повідомлення не зміняться.');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var t = document.querySelector("[data-tpl-text]"), p = document.querySelector("[data-tpl-preview]"), c = document.querySelector("[data-tpl-count]");
+  if (!t) return;
+  t.addEventListener("input", function () { p.textContent = t.value; c.textContent = t.value.length; });
+})();
+</script>
+{% endblock %}

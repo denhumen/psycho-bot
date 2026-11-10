@@ -1,18 +1,28 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, more_menu %}
 {% block title %}Огляд{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Огляд</h1>
-    <div class="sub">Стан дослідження на {{ local(now, "%d.%m.%Y, %H:%M") }}</div>
+<div class="head">
+  <div><h1>Огляд</h1><div class="sub">Оновлено {{ local(now) }}</div></div>
+  {% if admin.role == "owner" %}
+  <div class="actions">
+    {% call more_menu("Інші дії: розсилка") %}
+      <form method="post" action="/pause"
+            onsubmit="return confirm('{{ 'Відновити автоматичну розсилку? Усе пропущене за час паузи буде оброблено на наступному тіку.' if paused else 'Призупинити ВСІ автоматичні повідомлення учасникам: інструкції, нагадування, фінальні посилання?' }}');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="paused" value="{{ 'false' if paused else 'true' }}">
+        <button type="submit" class="{{ '' if paused else 'bad' }}">{{ "Відновити розсилку" if paused else "Призупинити розсилку" }}</button>
+      </form>
+    {% endcall %}
   </div>
+  {% endif %}
 </div>
 
 {% if paused %}
-<div class="banner warn" role="status">
-  <div><strong>Автоматична розсилка на паузі.</strong> Учасники не отримують інструкцій і нагадувань; сесії не закриваються.</div>
+<div class="banner" role="status">
+  <div><strong>Автоматична розсилка на паузі.</strong> Учасники не отримують інструкцій і нагадувань, сесії не закриваються.</div>
   {% if admin.role == "owner" %}
-  <form method="post" action="/pause" class="inline-form"
+  <form method="post" action="/pause" class="inline"
         onsubmit="return confirm('Відновити автоматичну розсилку? Усе пропущене за час паузи буде оброблено на наступному тіку.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="paused" value="false">
@@ -22,100 +32,52 @@
 </div>
 {% endif %}
 
-<div class="stack">
-  <section aria-labelledby="att">
-    <h2 id="att">Потребує уваги</h2>
-    <div class="attention">
-      {% set tiles = [
-        ("/participants?flag=unread", attention.unread, "Непрочитані повідомлення", "учасників написали і чекають на відповідь"),
-        ("/participants?flag=not_done_today", attention.not_done_today, "Не пройшли сьогодні", "інструкцію надіслано, опитування ще відкрите"),
-        ("/participants?flag=missed_streak", attention.missed_streak, "Пропустили 2+ дні поспіль", "варто написати і підтримати"),
-        ("/participants?flag=blocked", blocked, "Заблокували бота", "повідомлення їм не доходять"),
-      ] %}
-      {% for href, n, title, desc in tiles %}
-      <a href="{{ href }}" class="card alert-tile {{ 'is-hot' if n else 'is-zero' }}">
-        <div class="n">{{ n }}</div>
-        <div><div class="t">{{ title }}</div><div class="d">{{ desc }}</div></div>
-      </a>
-      {% endfor %}
-    </div>
-  </section>
-
-  <section aria-labelledby="ppl">
-    <h2 id="ppl">Учасники</h2>
-    <div class="kpis">
-      <a href="/participants" class="card kpi"><div class="value">{{ total }}</div><div class="label">усього</div></a>
-      <a href="/participants?status=active" class="card kpi"><div class="value">{{ counts.active }}</div><div class="label">активні</div></a>
-      <a href="/participants?status=completed" class="card kpi"><div class="value">{{ counts.completed }}</div><div class="label">завершили</div></a>
-      <a href="/participants?flag=not_started" class="card kpi"><div class="value">{{ attention.not_started }}</div><div class="label">ще не стартували</div>
-        <div class="hint">{{ counts.registered }} без згоди · {{ counts.consented }} без старту</div></a>
-      <a href="/participants?status=withdrawn" class="card kpi"><div class="value">{{ counts.withdrawn }}</div><div class="label">вибули</div>
-        <div class="hint">ще {{ counts.declined }} не погодились</div></a>
-    </div>
-  </section>
-
-  <div class="grid-2">
-    <section class="card card-pad" aria-labelledby="today">
-      <h2 id="today">Сьогодні</h2>
-      {% set done = day.completed %}{% set waiting = awaiting %}{% set base = [day.sent, done + waiting, 1]|max %}
-      <p><span style="font-size:22px;font-weight:650">{{ done }}</span> <span class="muted">з {{ day.sent }} надісланих інструкцій уже пройшли опитування</span></p>
-      <div class="meter" role="img" aria-label="Пройдено {{ done }}, очікують {{ waiting }}">
-        <span class="ok" style="width: {{ (done / base * 100)|round(1) }}%"></span>
-        <span class="info" style="width: {{ (waiting / base * 100)|round(1) }}%"></span>
-      </div>
-      <div class="legend">
-        <span><i style="background:var(--ok)"></i>чек-інів пройдено: {{ done }}</span>
-        <span><i style="background:var(--info)"></i>очікують чек-іну: {{ waiting }}</span>
-        <span><i style="background:var(--muted-soft);border:1px solid var(--border-strong)"></i>інструкцій надіслано: {{ day.sent }}</span>
-      </div>
-    </section>
-
-    <section class="card card-pad" aria-labelledby="rnd">
-      <h2 id="rnd">Рандомізація</h2>
-      <div class="kpis" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr))">
-        <div><div style="font-size:22px;font-weight:650">{{ randomized }}</div><div class="muted">рандомізовано</div></div>
-        {% if groups %}
-        <div><div style="font-size:22px;font-weight:650">{{ groups.randomized.A }} / {{ groups.randomized.B }}</div><div class="muted">рандомізовано A / B</div></div>
-        <div><div style="font-size:22px;font-weight:650">{{ groups.completed.A }} / {{ groups.completed.B }}</div><div class="muted">завершили A / B</div></div>
-        {% endif %}
-      </div>
-      {% if groups %}<p class="faint small" style="margin-top:10px">Розбиття за групами бачить лише owner.</p>{% endif %}
-    </section>
-  </div>
-
-  <div class="grid-2">
-    <section class="card" aria-labelledby="cnf">
-      <div class="card-head"><h2 id="cnf">Конфлікти кодів</h2><span class="tag">{{ conflicts_total }}</span></div>
-      {% if conflicts %}
-      <div class="table-wrap"><table>
-        <thead><tr><th>Код</th><th>Коли</th></tr></thead>
-        <tbody>
-        {% for event, code in conflicts %}
-        <tr><td class="code"><a href="/participants/{{ code }}">{{ code }}</a></td><td class="muted">{{ local(event.at) }}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
-      <p class="faint small card-pad" style="padding-top:10px">Хтось спробував зареєструвати вже використаний код з іншого акаунта Telegram.</p>
-      {% else %}
-      <div class="empty">Конфліктів немає.</div>
-      {% endif %}
-    </section>
-
-    <section class="card card-pad" aria-labelledby="sys">
-      <h2 id="sys">Система</h2>
-      <dl class="facts">
-        <div><dt>Останній бекап у Telegram</dt><dd>{{ local(last_backup) }}</dd></div>
-        <div><dt>Автоматична розсилка</dt><dd>{% if paused %}<span class="badge danger">на паузі</span>{% else %}<span class="badge s-completed">працює</span>{% endif %}</dd></div>
-      </dl>
-      {% if admin.role == "owner" and not paused %}
-      <form method="post" action="/pause" style="margin-top:16px"
-            onsubmit="return confirm('Призупинити ВСІ автоматичні повідомлення учасникам (інструкції, нагадування, фінальні посилання)?');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="hidden" name="paused" value="true">
-        <button type="submit" class="btn danger">Призупинити розсилку</button>
-      </form>
-      {% endif %}
-    </section>
-  </div>
+<div class="tiles compact" aria-label="Потребує уваги">
+  {% for href, n, t, d in [
+      ("/participants?flag=unread", attention.unread, "Чекають на відповідь", "непрочитані повідомлення"),
+      ("/participants?flag=not_done_today", attention.not_done_today, "Не пройшли сьогодні", "опитування ще відкрите"),
+      ("/participants?flag=missed_streak", attention.missed_streak, "Пропустили 2+ дні", "поспіль, поточна серія"),
+      ("/participants?flag=blocked", attention.blocked, "Заблокували бота", "повідомлення не доходять"),
+  ] %}
+  <a href="{{ href }}" class="tile {{ 'att' if n else 'zero' }}"><div class="n">{{ n }}</div><div><div class="t">{{ t }}</div><div class="d">{{ d }}</div></div></a>
+  {% endfor %}
 </div>
+
+<section class="panel pad stack" aria-labelledby="f-today">
+  <div class="row between"><h2 id="f-today">Сьогодні</h2><span class="faint small">{{ today.sent }} {{ today.sent|plural("інструкцію", "інструкції", "інструкцій") }} надіслано</span></div>
+  {% set base = [today.sent, 1]|max %}
+  <div class="bar" role="img" aria-label="Пройшли {{ today.done }}, очікують {{ today.open }}">
+    <span class="b-ok" style="width: {{ (today.done / base * 100)|round(1) }}%"></span>
+    <span class="b-wait" style="width: {{ (today.open / base * 100)|round(1) }}%"></span>
+  </div>
+  <div class="legend"><span><i class="sw b-ok"></i>Пройшли опитування {{ today.done }}</span><span><i class="sw b-wait"></i>Очікують {{ today.open }}</span></div>
+</section>
+
+<section class="panel pad stack" aria-labelledby="f-flow">
+  <div class="row between"><h2 id="f-flow">Потік учасників</h2><span class="faint small">як у діаграмі CONSORT</span></div>
+  <div class="flow">
+    <div class="st"><div class="v">{{ flow.registered }}</div><div class="l">Зареєструвались</div><div class="x">без згоди {{ flow.no_consent_yet }}, не погодились {{ flow.declined }}</div></div>
+    <div class="st"><div class="v">{{ flow.consented }}</div><div class="l">Дали згоду</div><div class="x">не стартували {{ flow.not_started }}, вибули до старту {{ flow.withdrawn_before }}</div></div>
+    <div class="st"><div class="v">{{ flow.randomized }}</div><div class="l">Рандомізовано</div>
+      {% if groups %}<div class="x">A {{ groups.randomized.A }}, B {{ groups.randomized.B }} (бачить лише owner)</div>{% endif %}</div>
+    <div class="st"><div class="v">{{ flow.in_week }}</div><div class="l">Проходять тиждень</div><div class="x">зараз між днями 1 і 7</div></div>
+    <div class="st"><div class="v">{{ flow.completed }}</div><div class="l">Завершили</div>
+      {% if groups %}<div class="x">A {{ groups.completed.A }}, B {{ groups.completed.B }}</div>{% endif %}</div>
+    <div class="st"><div class="v">{{ flow.withdrawn_after }}</div><div class="l">Вибули після старту</div><div class="x">з них {{ flow.withdrawn_blocked }} {{ flow.withdrawn_blocked|plural("заблокував", "заблокували", "заблокували") }} бота</div></div>
+  </div>
+</section>
+
+<section class="panel pad stack" aria-labelledby="f-days">
+  <div class="row between"><h2 id="f-days">Виконання за днями протоколу</h2><span class="faint small">пройдено з надісланих</span></div>
+  <div class="days">
+    {% for d in days %}
+    <div class="dayrow"><span class="small muted">День {{ d.day }}</span>
+      <div class="bar thin" role="img" aria-label="День {{ d.day }}: пройдено {{ d.done }}, пропущено {{ d.missed }}, відкрито {{ d.open }}">
+        <span class="b-ok" style="width:{{ d.pct(d.done) }}%"></span><span class="b-bad" style="width:{{ d.pct(d.missed) }}%"></span><span class="b-wait" style="width:{{ d.pct(d.open) }}%"></span><span class="b-faint" style="width:{{ d.rest_pct }}%"></span>
+      </div>
+      <span class="r">{{ d.done }} з {{ d.sent }}</span></div>
+    {% endfor %}
+  </div>
+  <div class="legend"><span><i class="sw b-ok"></i>Пройдено</span><span><i class="sw b-bad"></i>Пропущено</span><span><i class="sw b-wait"></i>Відкрито зараз</span><span><i class="sw b-faint"></i>Ще не настав або вибув</span></div>
+</section>
 {% endblock %}

@@ -1,69 +1,120 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, week %}
+{% from "_card.html" import card_script with context %}
 {% block title %}Учасники{% endblock %}
-{% set cell_class = {"●": "c-done", "✕": "c-missed", "○": "c-waiting", "·": "c-none"} %}
-{% macro qs(f) -%}
-?{% if status %}status={{ status }}&amp;{% endif %}{% if q %}q={{ q|urlencode }}&amp;{% endif %}flag={{ f }}
-{%- endmacro %}
+{% block shell_class %} peek-host{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Учасники</h1>
-    <div class="sub">{{ total }} у базі дослідження</div>
-  </div>
-</div>
-
-<div class="card">
+<div class="head"><h1>Учасники</h1></div>
+<section class="panel">
   <form method="get" action="/participants" class="toolbar" role="search">
     <input type="hidden" name="flag" value="{{ flag }}">
-    <input type="search" name="q" value="{{ q }}" placeholder="Пошук за кодом" aria-label="Пошук за кодом">
-    <select name="status" aria-label="Статус">
+    <label class="searchbox">{{ icon("search") }}<input class="inp mono" type="search" name="q" value="{{ q }}" placeholder="Код учасника" aria-label="Пошук за кодом"></label>
+    <select class="inp" name="status" style="width:auto;min-width:170px" aria-label="Статус" onchange="this.form.submit()">
       <option value="">Усі статуси</option>
-      {% for value, label in statuses.items() %}
-      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
+      {% for value, label in statuses.items() %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label|capitalize }}</option>{% endfor %}
     </select>
-    <button type="submit" class="btn secondary">Застосувати</button>
-    {% if status or flag or q %}<a href="/participants" class="btn ghost">Скинути все</a>{% endif %}
+    <div class="seg-wrap" role="group" aria-label="Швидкі фільтри">
+      <div class="seg">{% for value, label in filters.items() %}<a href="/participants{{ query(flag=value) }}" class="{{ 'on' if value == flag }}">{{ label }}</a>{% endfor %}</div>
+    </div>
+    <noscript><button type="submit" class="btn sm">Застосувати</button></noscript>
   </form>
-
-  <nav class="chips" aria-label="Швидкі фільтри">
-    {% for value, label in filters.items() %}
-    <a href="/participants{{ qs(value) }}" class="chip {{ 'on' if value == flag }}">{{ label }} <span class="k">{{ flag_counts[value] }}</span></a>
-    {% endfor %}
-  </nav>
-
-  <div class="result-line">
-    <span>Знайдено: <strong>{{ rows|length }}</strong></span>
-    <span class="legend-cells" aria-label="Позначення прогресу">
-      {% for symbol, title in cell_titles.items() %}
-      <span><span class="cells"><span class="{{ cell_class[symbol] }}" aria-hidden="true">{{ symbol }}</span></span> {{ title }}</span>
-      {% endfor %}
-    </span>
+  <div class="row between" style="padding:10px 20px;border-bottom:1px solid var(--line)">
+    <span class="small muted">Знайдено {{ found }}</span>
+    <div class="legend">
+      <span><span class="week"><i class="w-done">✓</i></span>пройдено</span>
+      <span><span class="week"><i class="w-miss">✕</i></span>пропущено</span>
+      <span><span class="week"><i class="w-wait"></i></span>відкрито</span>
+      <span><span class="week"><i class="w-none"></i></span>ще не надіслано</span>
+    </div>
   </div>
-
-  <div class="table-wrap">
-  <table>
-    <thead>
-      <tr><th>Код</th><th>Статус</th><th class="num col-opt">День</th><th>Прогрес за 7 днів</th><th class="col-opt">Остання активність</th><th class="num">Нові</th></tr>
-    </thead>
+  <div class="tbl-wrap"><table class="tbl rows-open" data-peek-table>
+    <thead><tr><th>Код</th><th>Статус</th><th>Тиждень</th><th class="col-opt">Остання активність</th><th>Повідомлення</th><th aria-label="Відкрити"></th></tr></thead>
     <tbody>
-    {% for row in rows %}
-      <tr>
-        <td class="code"><a href="/participants/{{ row.participant.code }}" title="{{ row.participant.code }}">{{ row.participant.code }}</a></td>
-        <td><span class="badge s-{{ row.participant.status }}">{{ status_label(row.participant.status) }}</span>
-          {% if row.participant.bot_blocked %}<span class="badge danger" title="Учасник заблокував бота">бот заблоковано</span>{% endif %}</td>
-        <td class="num col-opt">{{ row.day }}/{{ days }}</td>
-        <td><span class="cells">{% for c in row.cells %}<span title="День {{ loop.index }}: {{ cell_titles[c] }}" class="{{ cell_class[c] }}">{{ c }}</span>{% endfor %}</span></td>
-        <td class="muted col-opt" title="{{ local(row.participant.last_activity_at) }}">{{ ago(row.participant.last_activity_at) }}</td>
-        <td class="num">{% if row.unread %}<span class="count">{{ row.unread }}</span>{% endif %}</td>
+    {% for row in rows %}{% set p = row.participant %}
+      <tr data-code="{{ p.code }}" class="{{ 'sel' if card and card.participant.code == p.code }}">
+        <td><a href="/participants/{{ p.code }}" class="code">{{ p.code }}</a></td>
+        <td>{% if p.bot_blocked %}<div class="row"><span class="pill {{ p.status }}">{{ status_title(p.status) }}</span><span class="pill bad">Бот заблоковано</span></div>
+            {% else %}<span class="pill {{ p.status }}">{{ status_title(p.status) }}</span>{% endif %}</td>
+        <td>{% if row.day or p.randomized_at %}{{ week(row.cells) }}{% else %}<span class="faint small">ще не стартував</span>{% endif %}</td>
+        <td class="muted col-opt" title="{{ local(p.last_activity_at) }}">{{ ago(p.last_activity_at) }}</td>
+        <td>{% if row.unread %}<span class="flag">{{ row.unread }} {{ row.unread|plural("нове", "нові", "нових") }}</span>{% endif %}</td>
+        <td class="chev">{{ icon("chev") }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="6"><div class="empty">
-        За цими фільтрами нікого немає.{% if status or flag or q %} <a href="/participants">Скинути фільтри</a>{% endif %}
-      </div></td></tr>
+      <tr><td colspan="6"><div class="empty">За цими фільтрами нікого немає.{% if status or flag or q %} <a href="/participants">Скинути фільтри</a>{% endif %}</div></td></tr>
     {% endfor %}
     </tbody>
-  </table>
+  </table></div>
+  <div class="row between" style="padding:10px 20px;border-top:1px solid var(--line)">
+    <span class="small muted">{{ first }}–{{ last }} з {{ found }}</span>
+    <div class="row">
+      {% if page > 1 %}<a class="btn sm" href="/participants{{ query(page=page - 1) }}">Назад</a>{% else %}<button type="button" class="btn sm" disabled>Назад</button>{% endif %}
+      {% if page < pages %}<a class="btn sm" href="/participants{{ query(page=page + 1) }}">Далі</a>{% else %}<button type="button" class="btn sm" disabled>Далі</button>{% endif %}
+    </div>
   </div>
-</div>
+</section>
+{% endblock %}
+{% block after_main %}<div data-peek-slot>{% if card %}{% include "_peek.html" %}{% endif %}</div>{% endblock %}
+{% block scripts %}
+{{ card_script() }}
+<script>
+(function () {
+  var table = document.querySelector("[data-peek-table]");
+  var slot = document.querySelector("[data-peek-slot]");
+  if (!table || !slot) return;
+  var listUrl = {{ list_url|tojson }};
+  var rows = function () { return Array.prototype.slice.call(table.querySelectorAll("tbody tr[data-code]")); };
+
+  function select(code) {
+    rows().forEach(function (r) { r.classList.toggle("sel", r.dataset.code === code); });
+  }
+  function close() {
+    slot.innerHTML = "";
+    select(null);
+    history.replaceState(null, "", listUrl);
+  }
+  function open(code) {
+    fetch("/participants/" + encodeURIComponent(code) + "/peek?back=" + encodeURIComponent(listUrl), {credentials: "same-origin"})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) {
+        slot.innerHTML = html;
+        select(code);
+        window.wireCard(slot);
+        history.replaceState(null, "", listUrl + (listUrl.indexOf("?") >= 0 ? "&" : "?") + "peek=" + encodeURIComponent(code));
+        wirePeek();
+      })
+      .catch(function () { location.href = "/participants/" + encodeURIComponent(code); });
+  }
+  function step(delta) {
+    var peek = slot.querySelector("[data-peek]");
+    if (!peek) return;
+    var list = rows(), i = list.findIndex(function (r) { return r.dataset.code === peek.dataset.peek; });
+    var next = list[i + delta];
+    if (next) { open(next.dataset.code); next.scrollIntoView({block: "nearest"}); }
+  }
+  function wirePeek() {
+    var c = slot.querySelector("[data-peek-close]");
+    if (c) c.addEventListener("click", function (e) { e.preventDefault(); close(); });
+    var p = slot.querySelector("[data-peek-prev]"), n = slot.querySelector("[data-peek-next]");
+    if (p) p.addEventListener("click", function () { step(-1); });
+    if (n) n.addEventListener("click", function () { step(1); });
+  }
+
+  table.addEventListener("click", function (e) {
+    var row = e.target.closest("tr[data-code]");
+    if (!row || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    open(row.dataset.code);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!slot.querySelector("[data-peek]")) return;
+    var tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "textarea" || tag === "input" || tag === "select") { if (e.key === "Escape") e.target.blur(); return; }
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+  });
+  wirePeek();
+})();
+</script>
 {% endblock %}
