@@ -1,7 +1,9 @@
 """Завантаження й валідація content/*.json. Невалідний контент — застосунок не стартує."""
 
+import html
 import json
 import string
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -121,60 +123,160 @@ REQUIRED_PLACEHOLDERS = {
 }
 
 
+# Розмітка Telegram (parse_mode=HTML), дозволена в «розширених» текстах.
+TELEGRAM_TAGS = {"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "a", "code", "pre", "blockquote", "tg-spoiler"}
+URL_PREFIXES = ("https://", "http://", "tg://")
+MAX_RICH_LENGTH = 4000
+MAX_BUTTONS = 8
+
+
+class _TelegramHtml(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.errors: list[str] = []
+        self.stack: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in TELEGRAM_TAGS:
+            self.errors.append(f"тег <{tag}> не підтримується Telegram (дозволені: {', '.join(sorted(TELEGRAM_TAGS))})")
+            return
+        names = {name for name, _ in attrs}
+        if tag == "a":
+            href = dict(attrs).get("href") or ""
+            if names != {"href"} or not href.startswith(URL_PREFIXES):
+                self.errors.append("посилання має бути <a href=\"https://...\">текст</a>")
+        elif names:
+            self.errors.append(f"тег <{tag}> не може мати атрибутів")
+        self.stack.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self.stack or self.stack[-1] != tag:
+            self.errors.append(f"зайвий або неправильно вкладений </{tag}>")
+        else:
+            self.stack.pop()
+
+    def close(self) -> None:
+        super().close()
+        if self.stack:
+            self.errors.append(f"незакритий тег <{self.stack[-1]}>")
+
+
+class _Plain(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def plain_text(markup: str) -> str:
+    """HTML-розмітка Telegram → звичайний текст (для показу в адмінці)."""
+    parser = _Plain()
+    parser.feed(markup)
+    parser.close()
+    return "".join(parser.parts)
+
+
+def telegram_html_errors(text: str) -> list[str]:
+    parser = _TelegramHtml()
+    parser.feed(text)
+    parser.close()
+    return parser.errors
+
+
+class UrlButton(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+    url: str
+
+    @model_validator(mode="after")
+    def _url(self) -> "UrlButton":
+        if not self.url.startswith(URL_PREFIXES):
+            raise ValueError(f"кнопка «{self.text}»: url має починатися з https://, http:// або tg://")
+        return self
+
+
+class RichText(BaseModel):
+    """Текст з HTML-розміткою Telegram і кнопками-посиланнями під повідомленням."""
+
+    model_config = ConfigDict(extra="forbid")
+    text: NonEmpty
+    buttons: list[UrlButton] = Field(default_factory=list, max_length=MAX_BUTTONS)
+
+    @model_validator(mode="after")
+    def _markup(self) -> "RichText":
+        errors = telegram_html_errors(self.text)
+        if errors:
+            raise ValueError("; ".join(errors))
+        if len(self.text) > MAX_RICH_LENGTH:
+            raise ValueError(f"текст довший за {MAX_RICH_LENGTH} символів")
+        return self
+
+
+TextValue = NonEmpty | RichText
+# Підписи кнопок і фрагменти, що вставляються в інші тексти, — лише звичайний рядок.
+PLAIN_ONLY_PREFIXES = ("btn_", "status_today_")
+
+
 class Texts(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    welcome_ask_code: NonEmpty
-    not_registered: NonEmpty
-    code_invalid_format: NonEmpty
-    code_not_found: NonEmpty
-    code_conflict: NonEmpty
-    consent: NonEmpty
-    btn_consent_yes: NonEmpty
-    btn_consent_no: NonEmpty
-    consent_declined: NonEmpty
-    choose_time: NonEmpty
-    time_explanation: NonEmpty
-    btn_ready: NonEmpty
-    started: NonEmpty
-    btn_checkin: NonEmpty
-    checkin_thanks: NonEmpty
-    checkin_expired: NonEmpty
-    checkin_already_done: NonEmpty
-    auto_reminder: NonEmpty
-    final_message: NonEmpty
-    help: NonEmpty
-    stop_confirm: NonEmpty
-    btn_stop_yes: NonEmpty
-    btn_stop_no: NonEmpty
-    stopped: NonEmpty
-    stop_cancelled: NonEmpty
-    stop_unavailable: NonEmpty
-    time_choose_new: NonEmpty
-    time_changed: NonEmpty
-    time_unavailable: NonEmpty
-    free_text_ack: NonEmpty
-    free_text_ack_active: NonEmpty
-    media_not_supported: NonEmpty
-    status_registered: NonEmpty
-    status_consented: NonEmpty
-    status_ready: NonEmpty
-    status_waiting: NonEmpty
-    status_active: NonEmpty
-    status_today_done: NonEmpty
-    status_today_pending: NonEmpty
-    status_today_missed: NonEmpty
-    status_completed: NonEmpty
-    status_declined: NonEmpty
-    status_withdrawn: NonEmpty
-    button_outdated: NonEmpty
+    welcome_ask_code: TextValue
+    not_registered: TextValue
+    code_invalid_format: TextValue
+    code_not_found: TextValue
+    code_conflict: TextValue
+    consent: TextValue
+    btn_consent_yes: TextValue
+    btn_consent_no: TextValue
+    consent_declined: TextValue
+    choose_time: TextValue
+    time_explanation: TextValue
+    btn_ready: TextValue
+    started: TextValue
+    btn_checkin: TextValue
+    checkin_thanks: TextValue
+    checkin_expired: TextValue
+    checkin_already_done: TextValue
+    auto_reminder: TextValue
+    final_message: TextValue
+    help: TextValue
+    stop_confirm: TextValue
+    btn_stop_yes: TextValue
+    btn_stop_no: TextValue
+    stopped: TextValue
+    stop_cancelled: TextValue
+    stop_unavailable: TextValue
+    time_choose_new: TextValue
+    time_changed: TextValue
+    time_unavailable: TextValue
+    free_text_ack: TextValue
+    free_text_ack_active: TextValue
+    media_not_supported: TextValue
+    status_registered: TextValue
+    status_consented: TextValue
+    status_ready: TextValue
+    status_waiting: TextValue
+    status_active: TextValue
+    status_today_done: TextValue
+    status_today_pending: TextValue
+    status_today_missed: TextValue
+    status_completed: TextValue
+    status_declined: TextValue
+    status_withdrawn: TextValue
+    button_outdated: TextValue
 
     @model_validator(mode="after")
     def _placeholders(self) -> "Texts":
         errors = []
         for key, value in self:
+            if isinstance(value, RichText) and key.startswith(PLAIN_ONLY_PREFIXES):
+                errors.append(f"{key}: тут дозволено лише звичайний рядок, без розмітки й кнопок")
+                continue
+            template = value.text if isinstance(value, RichText) else value
             try:
-                used = {field for _, field, _, _ in string.Formatter().parse(value) if field is not None}
+                used = {field for _, field, _, _ in string.Formatter().parse(template) if field is not None}
             except ValueError as exc:
                 errors.append(f"{key}: некоректні фігурні дужки ({exc})")
                 continue
@@ -196,11 +298,26 @@ class Content(BaseModel):
     support_contact: str = ""
 
     def t(self, key: str, **values: Any) -> str:
-        template: str = getattr(self.texts, key)
-        return template.format(support=self.support_contact, **values)
+        value: str | RichText = getattr(self.texts, key)
+        values = {"support": self.support_contact, **values}
+        if isinstance(value, RichText):
+            # Підставлені значення (контакт, посилання, дата) — звичайний текст усередині HTML.
+            return value.text.format(**{k: html.escape(str(v), quote=False) for k, v in values.items()})
+        return value.format(**values)
+
+    def rich(self, key: str | None) -> RichText | None:
+        """Розширений текст (HTML + кнопки) для ключа texts.json, або None для звичайного рядка."""
+        if not key or key not in Texts.model_fields:
+            return None
+        value = getattr(self.texts, key)
+        return value if isinstance(value, RichText) else None
 
     def todo_markers(self) -> list[str]:
-        found = [f"texts.{key}" for key, value in self.texts if TODO_MARKER in value]
+        found = [
+            f"texts.{key}"
+            for key, value in self.texts
+            if TODO_MARKER in (value.text if isinstance(value, RichText) else value)
+        ]
         found += [f"checkin.{q.id}" for q in self.checkin.questions if TODO_MARKER in q.text]
         found += [
             f"instructions.{group}.{day}"

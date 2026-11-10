@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None, *, run_background: bool = True,
             db=db,
             read=create_read_sessionmaker(engine),
             content=content,
-            sender=Sender(telegram, db),
+            sender=Sender(telegram, db, content),
         )
         app.state.ctx = ctx
         async with ctx.db() as session, session.begin():

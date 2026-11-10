@@ -37,14 +37,15 @@ def _context(settings: Settings) -> AppContext:
     run_migrations(settings.database_path)
     engine = create_engine(settings.database_path)
     db = create_sessionmaker(engine)
+    content = load_content(settings.content_dir, settings.support_contact)
     bot = create_bot(settings.bot_token.get_secret_value()) if settings.bot_token.get_secret_value() else None
     return AppContext(
         settings=settings,
         engine=engine,
         db=db,
         read=create_read_sessionmaker(engine),
-        content=load_content(settings.content_dir, settings.support_contact),
-        sender=Sender(bot, db),  # type: ignore[arg-type]
+        content=content,
+        sender=Sender(bot, db, content),  # type: ignore[arg-type]
     )
 
 

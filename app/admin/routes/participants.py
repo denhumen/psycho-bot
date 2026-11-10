@@ -24,6 +24,7 @@ from app.db.models import (
     Status,
     StudySession,
 )
+from app.domain.content import plain_text
 from app.domain.events import admin_actor, log_event, set_status
 from app.domain.participants import chat_of, normalize_code
 from app.domain.sessions import DAYS
@@ -145,7 +146,9 @@ def build_chat(
             items.append(ChatItem(m.created_at, "msg", m.text, direction="in", author="Учасник", unread=unread))
         else:
             author = authors.get(m.sender_admin_id or 0, "") if m.kind == Kind.MANUAL else "Бот"
-            items.append(ChatItem(m.created_at, "msg", m.text, direction="out", author=author))
+            # Розширені тексти з texts.json надсилаються з HTML-розміткою — в адмінці без тегів.
+            text = plain_text(m.text) if ctx.content.rich(m.text_key) else m.text
+            items.append(ChatItem(m.created_at, "msg", text, direction="out", author=author))
     for s in sessions:
         if s.completed_at is not None:
             hhmm = s.completed_at.astimezone(tz).strftime("%H:%M")

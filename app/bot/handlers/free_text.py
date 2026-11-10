@@ -66,7 +66,7 @@ async def on_any_message(message: Message, ctx: AppContext) -> None:
         if message.text and not message.text.startswith("/"):
             await handle_code(ctx, chat_id, message.text)
         else:
-            await ctx.sender.send(chat_id, ctx.content.t("not_registered"))
+            await ctx.sender.send(chat_id, ctx.content.t("not_registered"), text_key="not_registered")
         return
     if reply_key is not None:
         await ctx.sender.send(chat_id, ctx.content.t(reply_key), participant_id=participant.id, text_key=reply_key)

@@ -2,6 +2,7 @@
 мережеві ретраї, Forbidden → bot_blocked, лог у messages."""
 
 import asyncio
+import html
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -14,11 +15,19 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
+from aiogram.enums import ParseMode
 from aiogram.methods import EditMessageText, SendDocument, SendMessage, TelegramMethod
-from aiogram.types import BufferedInputFile, InaccessibleMessage, InlineKeyboardMarkup, MaybeInaccessibleMessage
+from aiogram.types import (
+    BufferedInputFile,
+    InaccessibleMessage,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MaybeInaccessibleMessage,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import Kind, Message, Participant
+from app.domain.content import Content, RichText
 from app.domain.events import log_event
 
 log = logging.getLogger(__name__)
@@ -82,10 +91,21 @@ class SendResult:
     blocked: bool = False
 
 
+def with_url_buttons(markup: InlineKeyboardMarkup | None, rich: RichText) -> InlineKeyboardMarkup | None:
+    """Кнопки-посилання з texts.json — окремими рядками під кнопками, які задає код."""
+    if not rich.buttons:
+        return markup
+    rows = list(markup.inline_keyboard) if markup else []
+    rows += [[InlineKeyboardButton(text=b.text, url=b.url)] for b in rich.buttons]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 class Sender:
-    def __init__(self, bot: Bot, db: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(self, bot: Bot, db: async_sessionmaker[AsyncSession], content: Content | None = None) -> None:
         self.bot = bot
         self.db = db
+        # Для розширених текстів texts.json (HTML і кнопки-посилання) за text_key.
+        self.content = content
         self.sleep = asyncio.sleep  # тести підміняють, щоб не чекати RetryAfter
 
     async def call[T](self, method: TelegramMethod[T]) -> T:
@@ -120,12 +140,19 @@ class Sender:
     ) -> SendResult:
         """Надсилає текст; після успіху в одній транзакції пише messages і виконує `after`.
         Порядок «надіслати → записати» дає at-least-once при жорсткому краші (див. DECISIONS.md)."""
-        chunks = split_text(text)
+        rich = self.content.rich(text_key) if self.content is not None else None
+        parse_mode = ParseMode.HTML if rich else None
+        if rich:
+            reply_markup = with_url_buttons(reply_markup, rich)
+        # Розширений текст не ділимо: розрізання могло б зламати HTML (довжину обмежує валідація).
+        chunks = [text] if rich else split_text(text)
         message_ids: list[int] = []
         try:
             for index, chunk in enumerate(chunks):
                 markup = reply_markup if index == len(chunks) - 1 else None
-                sent = await self.call(SendMessage(chat_id=chat_id, text=chunk, reply_markup=markup))
+                sent = await self.call(
+                    SendMessage(chat_id=chat_id, text=chunk, reply_markup=markup, parse_mode=parse_mode)
+                )
                 message_ids.append(sent.message_id)
         except TelegramForbiddenError:
             log.warning("Учасник %s заблокував бота", participant_id)
@@ -168,16 +195,20 @@ class Sender:
         await self.call(SendDocument(chat_id=chat_id, document=BufferedInputFile(data, filename), caption=caption))
 
     async def mark_choice(self, chat_id: int, message: MaybeInaccessibleMessage | None, label: str) -> None:
-        """Після натискання кнопки: дописати обраний варіант і прибрати клавіатуру."""
+        """Після натискання кнопки: дописати обраний варіант і прибрати кнопки-дії.
+        Форматування і кнопки-посилання (з texts.json) зберігаються."""
         if message is None or isinstance(message, InaccessibleMessage) or not message.text:
             return
+        rows = message.reply_markup.inline_keyboard if message.reply_markup else []
+        links = [row for row in ([b for b in row if b.url] for row in rows) if row]
         try:
             await self.call(
                 EditMessageText(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    text=f"{message.text}\n\n✅ {label}",
-                    reply_markup=None,
+                    text=f"{message.html_text}\n\n✅ {html.escape(label, quote=False)}",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=links) if links else None,
                 )
             )
         except TelegramAPIError:

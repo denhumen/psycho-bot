@@ -46,7 +46,7 @@ def open_ctx(settings: Settings) -> AppContext:
         db=db,
         read=create_read_sessionmaker(engine),
         content=content,
-        sender=Sender(make_bot(), db),
+        sender=Sender(make_bot(), db, content),
     )
 
 

@@ -20,7 +20,8 @@ async def handle_code(ctx: AppContext, chat_id: int, raw: str) -> None:
     result = await register_code(ctx, chat_id, raw)
     if result.outcome in _REPLY_KEYS:
         # Учасника для цього chat_id ще немає — у messages не логуємо.
-        await ctx.sender.send(chat_id, ctx.content.t(_REPLY_KEYS[result.outcome]))
+        key = _REPLY_KEYS[result.outcome]
+        await ctx.sender.send(chat_id, ctx.content.t(key), text_key=key)
         return
     assert result.participant_id is not None
     if result.outcome == Registration.ALREADY_REGISTERED:

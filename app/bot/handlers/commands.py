@@ -17,7 +17,7 @@ async def _participant(ctx: AppContext, chat_id: int) -> Participant | None:
     async with ctx.read() as session:
         participant = await by_chat(session, chat_id)
     if participant is None:
-        await ctx.sender.send(chat_id, ctx.content.t("not_registered"))
+        await ctx.sender.send(chat_id, ctx.content.t("not_registered"), text_key="not_registered")
     return participant
 
 

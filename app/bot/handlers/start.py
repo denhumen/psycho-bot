@@ -17,7 +17,7 @@ async def on_start(message: Message, command: CommandObject, ctx: AppContext) ->
     elif command.args:
         await handle_code(ctx, chat_id, command.args)
     else:
-        await ctx.sender.send(chat_id, ctx.content.t("welcome_ask_code"))
+        await ctx.sender.send(chat_id, ctx.content.t("welcome_ask_code"), text_key="welcome_ask_code")
 
 
 def make_router() -> Router:
